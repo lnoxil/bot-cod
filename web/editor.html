@@ -60,7 +60,7 @@
         <div><label>Цвет линии</label><input id="color_hex" value="2ECC71"></div>
       </div>
       <div class="row">
-        <div><label>Режим отображения</label><select id="layout_mode"><option value="sidebar">Боковая панель (как сейчас)</option><option value="window">Окно (без цветной полосы)</option></select></div>
+        <div><label>Режим отображения</label><select id="layout_mode"><option value="sidebar">Боковая панель (как сейчас)</option><option value="window">Окно (один большой блок с секциями)</option><option value="container">Большие контейнеры (как в примере)</option></select></div>
         <div></div>
       </div>
       <label>Заголовок</label><input id="title" value="CapybarBuild">
@@ -322,7 +322,7 @@ function escapeHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 
 function normalizeRuntimeButtons(p, fromTags){
   const runtime=[...(Array.isArray(p.panel_buttons)?p.panel_buttons:[]), ...fromTags.buttons];
-  if(p.layout_mode==='window' && runtime.length){
+  if((p.layout_mode==='window' || p.layout_mode==='container') && runtime.length){
     const hasExplicitRows = runtime.some(b => (parseInt(b.row||0,10)||0) !== 0);
     if(!hasExplicitRows){
       runtime.forEach((b,i)=>{ b.row=Math.max(0,Math.min(4,i)); });
@@ -338,7 +338,7 @@ function updatePreview(){
   document.getElementById('p_desc').innerHTML=markdownPreview(fromTags.cleaned||'(без текста)');
 
   const pr=document.getElementById('preview');
-  if(p.layout_mode==='window'){
+  if(p.layout_mode==='window' || p.layout_mode==='container'){
     pr.style.borderImage='none';
     pr.style.borderLeftStyle='none';
     pr.style.borderLeftWidth='0';
@@ -392,12 +392,13 @@ function updatePreview(){
   document.getElementById('p_support_ticket').innerHTML = markdownPreview((p.auto_support_message||'').replaceAll('{user}','@Noxi'));
 
   const root=document.getElementById('previewBlocks'); root.innerHTML='';
-  if(p.layout_mode==='window' && p.extra_blocks.length){
+  if((p.layout_mode==='window' || p.layout_mode==='container') && p.extra_blocks.length){
     p.extra_blocks.forEach((b,i)=>{
       const row=document.createElement('div');
       row.className='block';
       row.style.background='#1f2430';
       row.style.marginTop='8px';
+      row.style.border='1px solid #2f3744';
       const btn=runtimeButtons[i];
       row.innerHTML=`<div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">`
         +`<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:26px;margin-bottom:4px">${escapeHtml(b.title||'Section')}</div><div class='desc'>${markdownPreview(b.description||'')}</div></div>`

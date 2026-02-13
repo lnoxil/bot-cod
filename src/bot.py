@@ -100,7 +100,7 @@ class SavedPost:
     title: str
     description: str
     color_hex: str = "2ECC71"
-    layout_mode: str = "sidebar"  # sidebar | window
+    layout_mode: str = "sidebar"  # sidebar | window | container
     image_url: str | None = None
     image_position: str = "bottom"
 
@@ -228,7 +228,7 @@ def normalize_saved_post(raw: dict) -> SavedPost:
     data["order_style"] = normalize_style_name(str(data.get("order_style", "success")))
     data["support_style"] = normalize_style_name(str(data.get("support_style", "primary")))
     layout_mode = str(data.get("layout_mode", "sidebar")).strip().lower()
-    data["layout_mode"] = layout_mode if layout_mode in {"sidebar", "window"} else "sidebar"
+    data["layout_mode"] = layout_mode if layout_mode in {"sidebar", "window", "container"} else "sidebar"
     data["order_emoji"] = str(data.get("order_emoji", "🧾")).strip()
     data["support_emoji"] = str(data.get("support_emoji", "🛟")).strip()
     clean = {k: v for k, v in data.items() if k in allowed}
@@ -896,8 +896,12 @@ def is_window_layout(post: SavedPost) -> bool:
     return str(post.layout_mode).strip().lower() == "window"
 
 
+def is_container_layout(post: SavedPost) -> bool:
+    return str(post.layout_mode).strip().lower() == "container"
+
+
 def stack_buttons_for_window_layout(post: SavedPost, buttons: list[PanelButton]) -> list[PanelButton]:
-    if not is_window_layout(post) or not buttons:
+    if not (is_window_layout(post) or is_container_layout(post)) or not buttons:
         return buttons
 
     # If rows are not explicitly configured (all in row 0), spread buttons one-per-row
@@ -913,6 +917,7 @@ def stack_buttons_for_window_layout(post: SavedPost, buttons: list[PanelButton])
 
 def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
     is_window_mode = is_window_layout(post)
+    is_container_mode = is_container_layout(post)
     base_color_hex = post.color_hex
     if post.auto_gradient:
         base_color_hex = hex_midpoint(post.gradient_start_hex, post.gradient_end_hex)
@@ -921,7 +926,7 @@ def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
         "title": post.title,
         "description": post.description,
     }
-    if not is_window_mode:
+    if not (is_window_mode or is_container_mode):
         main_kwargs["color"] = int(base_color_hex.strip("#"), 16)
 
     main = discord.Embed(**main_kwargs)
@@ -939,6 +944,20 @@ def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
                 inline=False,
             )
         return [main]
+
+    if is_container_mode:
+        result = [main]
+        for b in post.extra_blocks:
+            eb = discord.Embed(
+                title=b.title,
+                description=b.description,
+            )
+            if b.image_url:
+                if b.image_position == "top":
+                    eb.description = f"[image above]\n{eb.description}"
+                eb.set_image(url=b.image_url)
+            result.append(eb)
+        return result
 
     result = [main]
     for b in post.extra_blocks:
@@ -1248,7 +1267,7 @@ def parse_post_json(data: dict) -> SavedPost:
         )
 
     layout_mode = str(data.get("layout_mode", "sidebar")).strip().lower()
-    if layout_mode not in {"sidebar", "window"}:
+    if layout_mode not in {"sidebar", "window", "container"}:
         layout_mode = "sidebar"
 
     post = SavedPost(
