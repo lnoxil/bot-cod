@@ -59,6 +59,10 @@
         <div><label>Channel ID</label><input id="channel_id" placeholder="123..."></div>
         <div><label>Цвет линии</label><input id="color_hex" value="2ECC71"></div>
       </div>
+      <div class="row">
+        <div><label>Режим отображения</label><select id="layout_mode"><option value="sidebar">Боковая панель (как сейчас)</option><option value="window">Окно (без цветной полосы)</option></select></div>
+        <div></div>
+      </div>
       <label>Заголовок</label><input id="title" value="CapybarBuild">
 
       <label>Описание</label>
@@ -165,7 +169,7 @@
 </div>
 
 <script>
-const fields=["name","channel_id","title","description","color_hex","image_url","image_position","auto_gradient","gradient_start_hex","gradient_end_hex","is_ticket_panel","order_label","order_emoji","order_style","support_label","support_emoji","support_style","auto_order_message","auto_support_message"];
+const fields=["name","channel_id","title","description","color_hex","layout_mode","image_url","image_position","auto_gradient","gradient_start_hex","gradient_end_hex","is_ticket_panel","order_label","order_emoji","order_style","support_label","support_emoji","support_style","auto_order_message","auto_support_message"];
 fields.forEach(id=>{const el=document.getElementById(id); el.addEventListener('input', updatePreview); el.addEventListener('change', updatePreview);});
 
 let extraBlocks=[];
@@ -200,7 +204,7 @@ function markdownPreview(x){
 function payload(){
   return {
     name: val('name').trim().toLowerCase(), channel_id: val('channel_id').trim(), title: val('title'), description: val('description'),
-    color_hex: val('color_hex').replace('#',''), image_url: val('image_url').trim(), image_position: val('image_position'),
+    color_hex: val('color_hex').replace('#',''), layout_mode: val('layout_mode'), image_url: val('image_url').trim(), image_position: val('image_position'),
     auto_gradient: chk('auto_gradient'), gradient_start_hex: val('gradient_start_hex').replace('#',''), gradient_end_hex: val('gradient_end_hex').replace('#',''),
     is_ticket_panel: chk('is_ticket_panel'), order_label: val('order_label'), order_emoji: val('order_emoji').trim(), order_style: val('order_style'),
     support_label: val('support_label'), support_emoji: val('support_emoji').trim(), support_style: val('support_style'),
@@ -306,8 +310,24 @@ function updatePreview(){
   document.getElementById('p_desc').innerHTML=markdownPreview(p.description||'(без текста)');
 
   const pr=document.getElementById('preview');
-  if(p.auto_gradient){pr.style.borderImage=`linear-gradient(180deg,#${p.gradient_start_hex},#${p.gradient_end_hex}) 1`; pr.style.borderLeftWidth='4px'; pr.style.borderLeftStyle='solid';}
-  else {pr.style.borderImage='none'; pr.style.borderLeftColor='#'+(p.color_hex||'2ECC71');}
+  if(p.layout_mode==='window'){
+    pr.style.borderImage='none';
+    pr.style.borderLeftStyle='none';
+    pr.style.borderLeftWidth='0';
+    pr.style.border='1px solid #3a404f';
+  } else if(p.auto_gradient){
+    pr.style.border='none';
+    pr.style.borderImage=`linear-gradient(180deg,#${p.gradient_start_hex},#${p.gradient_end_hex}) 1`;
+    pr.style.borderLeftWidth='4px';
+    pr.style.borderLeftStyle='solid';
+  }
+  else {
+    pr.style.border='none';
+    pr.style.borderImage='none';
+    pr.style.borderLeftColor='#'+(p.color_hex||'2ECC71');
+    pr.style.borderLeftWidth='4px';
+    pr.style.borderLeftStyle='solid';
+  }
 
   const top=document.getElementById('p_img_top'), bot=document.getElementById('p_img_bottom');
   top.style.display='none'; bot.style.display='none';

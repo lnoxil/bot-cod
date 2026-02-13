@@ -100,6 +100,7 @@ class SavedPost:
     title: str
     description: str
     color_hex: str = "2ECC71"
+    layout_mode: str = "sidebar"  # sidebar | window
     image_url: str | None = None
     image_position: str = "bottom"
 
@@ -226,6 +227,8 @@ def normalize_saved_post(raw: dict) -> SavedPost:
     data["extra_blocks"] = blocks
     data["order_style"] = normalize_style_name(str(data.get("order_style", "success")))
     data["support_style"] = normalize_style_name(str(data.get("support_style", "primary")))
+    layout_mode = str(data.get("layout_mode", "sidebar")).strip().lower()
+    data["layout_mode"] = layout_mode if layout_mode in {"sidebar", "window"} else "sidebar"
     data["order_emoji"] = str(data.get("order_emoji", "🧾")).strip()
     data["support_emoji"] = str(data.get("support_emoji", "🛟")).strip()
     clean = {k: v for k, v in data.items() if k in allowed}
@@ -872,14 +875,17 @@ def hex_midpoint(a: str, b: str) -> str:
 
 
 def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
+    is_window_mode = str(post.layout_mode).strip().lower() == "window"
     base_color_hex = post.color_hex
     if post.auto_gradient:
         base_color_hex = hex_midpoint(post.gradient_start_hex, post.gradient_end_hex)
-    main = discord.Embed(
-        title=post.title,
-        description=post.description,
-        color=int(base_color_hex.strip("#"), 16),
-    )
+    main_kwargs: dict[str, object] = {
+        "title": post.title,
+        "description": post.description,
+    }
+    if not is_window_mode:
+        main_kwargs["color"] = int(base_color_hex.strip("#"), 16)
+    main = discord.Embed(**main_kwargs)
     if post.image_url and post.image_position == "top":
         main.description = f"[image above]\n{main.description}"
         main.set_image(url=post.image_url)
@@ -888,11 +894,13 @@ def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
 
     result = [main]
     for b in post.extra_blocks:
-        eb = discord.Embed(
-            title=b.title,
-            description=b.description,
-            color=int(b.color_hex.strip("#"), 16),
-        )
+        block_kwargs: dict[str, object] = {
+            "title": b.title,
+            "description": b.description,
+        }
+        if not is_window_mode:
+            block_kwargs["color"] = int(b.color_hex.strip("#"), 16)
+        eb = discord.Embed(**block_kwargs)
         if b.image_url:
             if b.image_position == "top":
                 eb.description = f"[image above]\n{eb.description}"
@@ -1126,12 +1134,17 @@ def parse_post_json(data: dict) -> SavedPost:
             )
         )
 
+    layout_mode = str(data.get("layout_mode", "sidebar")).strip().lower()
+    if layout_mode not in {"sidebar", "window"}:
+        layout_mode = "sidebar"
+
     post = SavedPost(
         name=str(data["name"]).strip().lower(),
         channel_id=int(data["channel_id"]),
         title=str(data.get("title", "")),
         description=str(data.get("description", "")),
         color_hex=str(data.get("color_hex", "2ECC71")),
+        layout_mode=layout_mode,
         image_url=str(data.get("image_url", "")).strip() or None,
         image_position=str(data.get("image_position", "bottom")),
         is_ticket_panel=bool(data.get("is_ticket_panel", False)),
