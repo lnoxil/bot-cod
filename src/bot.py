@@ -3,17 +3,19 @@ import json
 import logging
 import os
 import re
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 import discord
-from aiohttp import web
+from aiohttp import ClientSession, web
 from discord import ButtonStyle
 from discord.ext import commands
 from dotenv import load_dotenv
-from telegram import BotCommand, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, BotCommand
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -42,6 +44,10 @@ def env_int_list(name: str) -> set[int]:
     return {int(x.strip()) for x in raw.split(",") if x.strip()}
 
 
+def sanitize_filename(name: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]", "_", name).strip("._")
+    return cleaned or "file"
+
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SUPPORT_ROLE_ID = env_int("SUPPORT_ROLE_ID")
@@ -56,6 +62,7 @@ TG_ADMIN_IDS = env_int_list("TG_ADMIN_IDS")
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT = env_int("WEB_PORT", 8080) or 8080
 EDITOR_HTML_PATH = Path(os.getenv("EDITOR_HTML_PATH", "web/editor.html"))
+ARCHIVE_DIR = Path(os.getenv("ARCHIVE_DIR", "state/archives"))
 
 
 @dataclass
@@ -326,13 +333,7 @@ class CloseTicketButton(discord.ui.View):
             return
 
         await interaction.response.send_message("Тикет закрывается…", ephemeral=True)
-        await self.bot.notify_ticket(
-            ticket_type=binding.ticket_type,
-            opener_discord_id=binding.opener_discord_id,
-            text=f"🔒 Тикет закрыт: #{interaction.channel.name}",
-        )
-        self.bot.ticket_store.remove(interaction.channel.id)
-        await interaction.channel.delete(reason="Ticket closed")
+        await self.bot.close_ticket(interaction.channel, binding, closed_by=interaction.user)
 
 
 SUPPORTED_STYLES = {"primary", "secondary", "success", "danger"}
@@ -507,6 +508,101 @@ class BridgeBot(commands.Bot):
 
         if changed:
             self.ticket_store.set(binding)
+
+    async def _collect_ticket_archive(self, channel: discord.TextChannel) -> list[Path]:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ticket_dir = ARCHIVE_DIR / f"ticket_{channel.id}_{ts}"
+        attach_dir = ticket_dir / "attachments"
+        attach_dir.mkdir(parents=True, exist_ok=True)
+
+        lines: list[str] = []
+        files: list[Path] = []
+        downloaded: list[Path] = []
+
+        async with ClientSession() as session:
+            async for m in channel.history(limit=None, oldest_first=True):
+                t = m.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                msg_line = f"[{t}] {m.author.display_name} ({m.author.id}): {m.content or ''}".rstrip()
+                lines.append(msg_line)
+
+                for a in m.attachments:
+                    fname = sanitize_filename(a.filename)
+                    ap = attach_dir / f"{m.id}_{fname}"
+                    try:
+                        async with session.get(a.url) as resp:
+                            if resp.status == 200:
+                                ap.write_bytes(await resp.read())
+                                downloaded.append(ap)
+                                lines.append(f"  [file] {fname} -> {ap.name}")
+                            else:
+                                lines.append(f"  [file] {fname} -> download failed status={resp.status}")
+                    except Exception as exc:
+                        logger.exception("Attachment download failed: %s", a.url)
+                        lines.append(f"  [file] {fname} -> download error: {exc}")
+
+        txt_path = ticket_dir / "dialog.txt"
+        txt_path.write_text("\n".join(lines), encoding="utf-8")
+        files.append(txt_path)
+
+        try:
+            from docx import Document
+
+            doc = Document()
+            doc.add_heading(f"Ticket transcript #{channel.id}", 0)
+            for line in lines:
+                doc.add_paragraph(line)
+            docx_path = ticket_dir / "dialog.docx"
+            doc.save(docx_path)
+            files.append(docx_path)
+        except Exception:
+            logger.exception("DOCX export failed")
+
+        files.extend(downloaded)
+        return files
+
+    async def _send_ticket_rating(self, chat_id: int, ticket_type: str, channel_name: str, channel_id: int) -> None:
+        if not self.tg_app:
+            return
+        kb = InlineKeyboardMarkup(
+            [[
+                InlineKeyboardButton("✅ Заказ успешно", callback_data=f"ticket_rate:{channel_id}:success"),
+                InlineKeyboardButton("➖ Нейтрально", callback_data=f"ticket_rate:{channel_id}:neutral"),
+                InlineKeyboardButton("❌ Не выполнен", callback_data=f"ticket_rate:{channel_id}:failed"),
+            ]]
+        )
+        await self.tg_app.bot.send_message(
+            chat_id=chat_id,
+            text=f"Тикет закрыт: {ticket_type.upper()} #{channel_name}\nОцените результат:",
+            reply_markup=kb,
+        )
+
+    async def close_ticket(self, channel: discord.abc.GuildChannel, binding: TicketBinding, closed_by: discord.abc.User) -> None:
+        if not isinstance(channel, discord.TextChannel):
+            return
+
+        await self.notify_ticket(
+            ticket_type=binding.ticket_type,
+            opener_discord_id=binding.opener_discord_id,
+            text=f"🔒 Тикет закрыт: #{channel.name} (закрыл: {closed_by.display_name})",
+        )
+
+        archive_files = await self._collect_ticket_archive(channel)
+        targets = self._notification_targets(binding.ticket_type, binding.opener_discord_id)
+
+        for chat_id in targets:
+            for fp in archive_files:
+                try:
+                    with fp.open("rb") as f:
+                        await self.tg_app.bot.send_document(chat_id=chat_id, document=f)
+                except Exception:
+                    logger.exception("Failed sending archive file %s to chat %s", fp, chat_id)
+            try:
+                await self._send_ticket_rating(chat_id, binding.ticket_type, channel.name, channel.id)
+            except Exception:
+                logger.exception("Failed sending rating keyboard to chat %s", chat_id)
+
+        self.ticket_store.remove(channel.id)
+        await channel.delete(reason="Ticket closed")
 
     async def create_ticket(self, interaction: discord.Interaction, ticket_type: str, post: SavedPost | None = None) -> None:
         if not interaction.guild or not interaction.user or not interaction.channel:
@@ -796,6 +892,33 @@ async def tg_reply_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await tg_reply(update, f"Ошибка: {exc}")
 
 
+
+
+async def tg_ticket_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if not query or not query.data:
+        return
+
+    await query.answer()
+    parts = query.data.split(":", 2)
+    if len(parts) != 3:
+        return
+
+    status_map = {
+        "success": "✅ Заказ успешно",
+        "neutral": "➖ Нейтрально",
+        "failed": "❌ Не выполнен",
+    }
+    status = status_map.get(parts[2], parts[2])
+
+    text = query.message.text if query.message and query.message.text else "Тикет оценен"
+    new_text = f"{text}\n\nВыбрано: {status}"
+    try:
+        await query.edit_message_text(new_text)
+    except Exception:
+        # fallback: hide buttons at least
+        await query.edit_message_reply_markup(reply_markup=None)
+
 async def tg_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.exception("Telegram error", exc_info=context.error)
     if isinstance(update, Update):
@@ -916,6 +1039,7 @@ async def run() -> None:
     tg_app.add_handler(CommandHandler("post_save", tg_post_save))
     tg_app.add_handler(CommandHandler("post_send", tg_post_send))
     tg_app.add_handler(CommandHandler("reply_ticket", tg_reply_ticket))
+    tg_app.add_handler(CallbackQueryHandler(tg_ticket_rate, pattern=r"^ticket_rate:"))
     tg_app.add_error_handler(tg_error_handler)
 
     await tg_app.bot.set_my_commands(
