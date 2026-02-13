@@ -191,13 +191,25 @@ def normalize_saved_post(raw: dict) -> SavedPost:
     panel_buttons: list[PanelButton] = []
     for btn in raw_panel_buttons:
         if isinstance(btn, dict):
-            btn_allowed = {f.name for f in fields(PanelButton)}
-            clean_btn = {k: v for k, v in btn.items() if k in btn_allowed}
             try:
-                clean_btn["row"] = int(clean_btn.get("row", 0))
+                row = int(btn.get("row", 0))
             except Exception:
-                clean_btn["row"] = 0
-            panel_buttons.append(PanelButton(**clean_btn))
+                row = 0
+            action = str(btn.get("action", "none")).strip().lower()
+            if action == "link":
+                action = "url"
+            if action not in {"order", "support", "url", "none"}:
+                action = "none"
+            panel_buttons.append(
+                PanelButton(
+                    label=str(btn.get("label", "Button")),
+                    emoji=str(btn.get("emoji", "")).strip(),
+                    style=normalize_style_name(str(btn.get("style", "secondary"))),
+                    action=action,
+                    url=str(btn.get("url", "")).strip() or None,
+                    row=max(0, min(4, row)),
+                )
+            )
 
     if split_enabled and (split_title or split_description):
         blocks.append(
@@ -876,7 +888,8 @@ async def publish_post(bot: BridgeBot, post: SavedPost) -> discord.Message:
 
     runtime_post = materialize_post_for_send(post)
     embeds = embeds_from_post(runtime_post)
-    if runtime_post.is_ticket_panel:
+    has_runtime_buttons = bool(runtime_post.panel_buttons)
+    if runtime_post.is_ticket_panel or has_runtime_buttons:
         view = TicketOpenView(bot, runtime_post)
         return await channel.send(embeds=embeds, view=view)
     return await channel.send(embeds=embeds)
