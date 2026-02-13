@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discord Post Editor</title>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; background:#0f1115; color:#fff; margin:0; }
+    .wrap { display:grid; grid-template-columns: 1fr 1fr; gap:20px; padding:20px; }
+    .card { background:#1a1d24; border-radius:12px; padding:16px; }
+    label { display:block; margin:10px 0 6px; font-size:13px; color:#c9d1d9; }
+    input, textarea, select { width:100%; padding:10px; border-radius:8px; border:1px solid #2d333b; background:#11151a; color:#fff; }
+    textarea { min-height:150px; resize:vertical; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    button { margin-top:12px; padding:10px 14px; border-radius:8px; border:none; background:#2ecc71; color:#08130d; font-weight:700; cursor:pointer; }
+    button.secondary { background:#5865f2; color:#fff; }
+    button.dark { background:#2d333b; color:#fff; }
+
+    .preview { background:#2b2d31; border-left:4px solid #2ecc71; border-radius:8px; padding:12px; }
+    .preview h3 { margin:0 0 8px; }
+    .preview img { max-width:100%; border-radius:10px; margin-top:12px; }
+    .buttons { margin-top:10px; display:flex; gap:8px; }
+    .btn { background:#3a3f45; border-radius:8px; padding:8px 12px; font-weight:700; }
+    .btn.order { background:#2ecc71; color:#07130d; }
+    .btn.support { background:#5865f2; }
+    .status { margin-top:12px; color:#9ad0ff; white-space:pre-wrap; }
+    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>Редактор поста</h2>
+      <label>Имя шаблона</label>
+      <input id="name" placeholder="zenbuilds_ticket" />
+
+      <div class="row">
+        <div>
+          <label>Channel ID</label>
+          <input id="channel_id" placeholder="123456789012345678" />
+        </div>
+        <div>
+          <label>Цвет (#hex)</label>
+          <input id="color_hex" value="2ECC71" />
+        </div>
+      </div>
+
+      <label>Заголовок</label>
+      <input id="title" value="ZENBUILDS TICKET CENTER" />
+
+      <label>Описание</label>
+      <textarea id="description">🎁: We work with projects of any complexity and are ready to create something amazing for you
+
+💬: Our staff will provide the most comfortable communication with an individual approach to the client
+
+📋: You can try yourself as a builder in our team, we will welcome high quality specialists</textarea>
+
+      <label>Image URL</label>
+      <input id="image_url" placeholder="https://example.com/banner.jpg" />
+
+      <label><input type="checkbox" id="is_ticket_panel" /> Это ticket panel (Order/Support кнопки)</label>
+
+      <button onclick="savePost()">Сохранить шаблон</button>
+      <button class="secondary" onclick="publishPost()">Опубликовать в Discord</button>
+      <button class="dark" onclick="loadPost()">Загрузить шаблон</button>
+      <button class="dark" onclick="listPosts()">Список шаблонов</button>
+
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Live preview</h2>
+      <div class="preview" id="preview" style="border-left-color:#2ecc71">
+        <h3 id="p_title">ZENBUILDS TICKET CENTER</h3>
+        <div id="p_desc"></div>
+        <img id="p_img" style="display:none" />
+      </div>
+      <div class="buttons" id="p_buttons" style="display:none">
+        <div class="btn order">🧾 ORDER</div>
+        <div class="btn support">🛟 SUPPORT</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const ids = ["name","channel_id","title","description","color_hex","image_url","is_ticket_panel"];
+  ids.forEach(id => document.getElementById(id).addEventListener('input', updatePreview));
+  updatePreview();
+
+  function value(id){ return document.getElementById(id).value; }
+  function checked(id){ return document.getElementById(id).checked; }
+
+  function payload(){
+    return {
+      name: value('name').trim().toLowerCase(),
+      channel_id: value('channel_id').trim(),
+      title: value('title'),
+      description: value('description'),
+      color_hex: value('color_hex').replace('#',''),
+      image_url: value('image_url').trim(),
+      is_ticket_panel: checked('is_ticket_panel')
+    }
+  }
+
+  function updatePreview(){
+    const p = payload();
+    document.getElementById('p_title').textContent = p.title || '(без заголовка)';
+    document.getElementById('p_desc').innerText = p.description || '(без описания)';
+    document.getElementById('preview').style.borderLeftColor = '#' + (p.color_hex || '2ecc71');
+
+    const img = document.getElementById('p_img');
+    if(p.image_url){ img.src = p.image_url; img.style.display='block'; }
+    else { img.style.display='none'; }
+
+    document.getElementById('p_buttons').style.display = p.is_ticket_panel ? 'flex' : 'none';
+  }
+
+  async function savePost(){
+    const p = payload();
+    if(!p.name || !p.channel_id){ return setStatus('Нужны name и channel_id'); }
+    const res = await fetch('/api/posts/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p)});
+    const data = await res.json();
+    setStatus(JSON.stringify(data, null, 2));
+  }
+
+  async function publishPost(){
+    const p = payload();
+    if(!p.name){ return setStatus('Сначала укажи name и сохрани'); }
+    await savePost();
+    const res = await fetch(`/api/posts/${encodeURIComponent(p.name)}/publish`, {method:'POST'});
+    const data = await res.json();
+    setStatus(JSON.stringify(data, null, 2));
+  }
+
+  async function loadPost(){
+    const name = value('name').trim().toLowerCase();
+    if(!name){ return setStatus('Укажи name'); }
+    const res = await fetch(`/api/posts/${encodeURIComponent(name)}`);
+    const data = await res.json();
+    if(data.error){ return setStatus(JSON.stringify(data, null, 2)); }
+
+    document.getElementById('channel_id').value = data.channel_id ?? '';
+    document.getElementById('title').value = data.title ?? '';
+    document.getElementById('description').value = data.description ?? '';
+    document.getElementById('color_hex').value = data.color_hex ?? '2ECC71';
+    document.getElementById('image_url').value = data.image_url ?? '';
+    document.getElementById('is_ticket_panel').checked = !!data.is_ticket_panel;
+    updatePreview();
+    setStatus('Загружено: ' + name);
+  }
+
+  async function listPosts(){
+    const res = await fetch('/api/posts');
+    const data = await res.json();
+    setStatus(JSON.stringify(data, null, 2));
+  }
+
+  function setStatus(txt){ document.getElementById('status').textContent = txt; }
+</script>
+</body>
+</html>
