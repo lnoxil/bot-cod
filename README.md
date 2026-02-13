@@ -1,20 +1,38 @@
-# Discord ↔ Telegram Ticket Bridge + Full Web Editor
+# Discord ↔ Telegram Ticket Bridge + Advanced Web Editor
 
-Что теперь есть:
-- Полный web-редактор постов с live preview (`http://localhost:8080`)
-- Форматирование текста (bold/italic/underline/strike/code/quote)
-- Настройка кнопок ticket panel: текст, emoji, цвет
-- Split пост на 2 части (второй embed с отдельным цветом/текстом)
-- Публикация в Discord из редактора
-- Авто-сообщения внутри ORDER / SUPPORT тикета
-- Привязка Telegram к конкретному Discord пользователю (`/bind_discord`)
-- Уведомления по тикетам в общий Telegram чат + персонально привязанному пользователю
+Сделано под твой запрос:
+- полноценный редактор поста на сайте с live preview;
+- форматирование выделенного текста (bold/italic/underline/strike/code/quote);
+- фото можно ставить сверху или снизу;
+- градиент для боковой линии и кнопок (preview + авто-подбор цвета в Discord embed);
+- кнопки ORDER/SUPPORT полностью настраиваемые (цвет/текст/emoji);
+- добавление дополнительных блоков поста через `+` (одной публикацией отправляются все блоки);
+- персональные Telegram уведомления (бот пишет человеку, а не в общий чат);
+- роли Telegram: `admin`, `manager`, `builder`, `viewer`;
+- заказы/тикеты отправляются в ЛС привязанным пользователям и staff ролям;
+- канал тикета в Discord создается с ником пользователя.
 
-## Важные команды в Telegram
-- `/bind_discord <discord_user_id>`
+## Важное изменение
+`TELEGRAM_CHAT_ID` убран из конфигурации.
+Теперь используется персональная маршрутизация через привязки и роли.
+
+## Telegram команды
+- `/start`
+- `/bind_discord <discord_user_id>` — привязать Telegram чат к Discord пользователю
+- `/set_role <tg_user_id> <admin|manager|builder|viewer>` — назначить роль (только TG_ADMIN_IDS)
+- `/my_role`
 - `/post_save <name> <channel_id> title|description|color_hex|image_url?`
 - `/post_send <name>`
-- `/post_edit <name> <field> <value>`
+- `/reply_ticket <discord_channel_id> <text>`
+
+## .env
+```env
+DISCORD_TOKEN=
+TELEGRAM_TOKEN=
+TG_ADMIN_IDS=123456789,987654321
+```
+
+Остальное см. в `.env.example`.
 
 ## Запуск
 ```bash
@@ -25,15 +43,4 @@ cp .env.example .env
 python src/bot.py
 ```
 
-## Веб-редактор
-Открой:
-```text
-http://localhost:8080
-```
-
-В редакторе можно:
-- редактировать markdown-стиль текста кнопками при выделении;
-- менять цвета и подписи ORDER/SUPPORT;
-- включать split-mode (2 части поста);
-- задать auto-тексты для ORDER/SUPPORT тикетов;
-- сохранять шаблон и публиковать в Discord.
+Редактор: `http://localhost:8080`
