@@ -72,6 +72,7 @@ class TicketBinding:
     ticket_channel_id: int
     opener_discord_id: int
     ticket_type: str
+    digest_message_ids: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -415,20 +416,21 @@ class BridgeBot(commands.Bot):
             return
         await self.tg_app.bot.send_message(chat_id=chat_id, text=text, disable_web_page_preview=True)
 
-    async def notify_ticket(self, ticket_type: str, opener_discord_id: int, text: str) -> None:
+    def _notification_targets(self, ticket_type: str, opener_discord_id: int) -> set[int]:
         targets: set[int] = set()
 
         opener_chat = self.user_links.get_tg_chat(opener_discord_id)
         if opener_chat:
             targets.add(opener_chat)
 
-        # Always notify TG admins (interpreted as user/chat IDs in private dialogs)
         targets.update(TG_ADMIN_IDS)
-
-        # Notify role-registered chats
         targets.update(self.tg_roles.chats_with_roles({"admin", "manager"}))
         if ticket_type == "order":
             targets.update(self.tg_roles.chats_with_roles({"builder"}))
+        return targets
+
+    async def notify_ticket(self, ticket_type: str, opener_discord_id: int, text: str) -> None:
+        targets = self._notification_targets(ticket_type, opener_discord_id)
 
         if not targets:
             logger.warning("No Telegram targets for ticket notification: %s", text)
@@ -438,6 +440,73 @@ class BridgeBot(commands.Bot):
                 await self.send_tg(chat_id, text)
             except Exception:
                 logger.exception("Failed sending DM to TG user/chat %s", chat_id)
+
+    @staticmethod
+    def _message_text(msg: discord.Message) -> str:
+        text = (msg.content or "").strip()
+        if not text and msg.attachments:
+            text = "[attachment] " + ", ".join(a.filename for a in msg.attachments)
+        return text or "[empty]"
+
+    async def _update_ticket_digest(self, channel_id: int) -> None:
+        if not self.tg_app:
+            return
+        binding = self.ticket_store.get(channel_id)
+        if not binding:
+            return
+        channel = self.get_channel(channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            return
+
+        messages = []
+        async for m in channel.history(limit=20):
+            if m.author.bot:
+                continue
+            messages.append(m)
+            if len(messages) >= 5:
+                break
+
+        messages = list(reversed(messages))
+        lines = [f"🧾 {binding.ticket_type.upper()} #{channel.name}"]
+        if messages:
+            for i, m in enumerate(messages, 1):
+                lines.append(f"{i}. {m.author.display_name}: {self._message_text(m)}")
+        else:
+            lines.append("(пока нет сообщений клиента)")
+
+        digest = "\n".join(lines)
+        if len(digest) > 3800:
+            digest = digest[:3800] + "\n..."
+
+        targets = self._notification_targets(binding.ticket_type, binding.opener_discord_id)
+        if not targets:
+            return
+
+        changed = False
+        for chat_id in targets:
+            key = str(chat_id)
+            msg_id = binding.digest_message_ids.get(key)
+            try:
+                if msg_id:
+                    await self.tg_app.bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=msg_id,
+                        text=digest,
+                        disable_web_page_preview=True,
+                    )
+                else:
+                    sent = await self.tg_app.bot.send_message(
+                        chat_id=chat_id,
+                        text=digest,
+                        disable_web_page_preview=True,
+                    )
+                    binding.digest_message_ids[key] = sent.message_id
+                    changed = True
+            except Exception:
+                logger.exception("Failed updating digest chat=%s", chat_id)
+
+        if changed:
+            self.ticket_store.set(binding)
 
     async def create_ticket(self, interaction: discord.Interaction, ticket_type: str, post: SavedPost | None = None) -> None:
         if not interaction.guild or not interaction.user or not interaction.channel:
@@ -472,7 +541,7 @@ class BridgeBot(commands.Bot):
             reason="New ticket",
         )
 
-        self.ticket_store.set(TicketBinding(ticket_channel_id=ticket_channel.id, opener_discord_id=member.id, ticket_type=ticket_type))
+        self.ticket_store.set(TicketBinding(ticket_channel_id=ticket_channel.id, opener_discord_id=member.id, ticket_type=ticket_type, digest_message_ids={}))
 
         auto_msg = ""
         if post:
@@ -501,6 +570,24 @@ class BridgeBot(commands.Bot):
         )
         await interaction.followup.send(f"Тикет создан: {ticket_channel.mention}", ephemeral=True)
 
+
+
+    async def on_message(self, message: discord.Message) -> None:
+        if message.author.bot:
+            return
+        await self._update_ticket_digest(message.channel.id)
+        await self.process_commands(message)
+
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
+        if after.author and after.author.bot:
+            return
+        await self._update_ticket_digest(after.channel.id)
+
+    async def on_message_delete(self, message: discord.Message) -> None:
+        await self._update_ticket_digest(message.channel.id)
+
+    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
+        await self._update_ticket_digest(payload.channel_id)
 
 
 def hex_midpoint(a: str, b: str) -> str:
