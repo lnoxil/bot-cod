@@ -13,6 +13,7 @@
 - `/start`
 - `/bind_discord <discord_user_id>`
 - `/bind_discord_user <discord_user_id> <tg_user_id> [chat_id]` (admin)
+- `/add_notify_user <tg_user_id> [chat_id]` (admin, получать все уведомления)
 - `/register_me <admin|manager|builder|viewer>`
 - `/set_role <tg_user_id> <admin|manager|builder|viewer> [chat_id]`
 - `/my_role`
