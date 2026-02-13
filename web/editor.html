@@ -33,6 +33,8 @@
     .tab-panel.active{display:block}
     .ticket-preview{margin-top:12px;padding:10px;background:#222834;border-radius:8px;border:1px solid #2f3744}
     .ticket-preview h4{margin:0 0 8px}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .btn-chip{padding:8px 12px;border-radius:8px;font-weight:700;color:#fff;background:#4f545c}
     @media (max-width: 1000px){.wrap{grid-template-columns:1fr}}
   </style>
 </head>
@@ -97,6 +99,12 @@
       </div>
 
       <div class="blocks">
+        <h3>Кнопки панели (свободно по рядам)</h3>
+        <div id="panelButtons"></div>
+        <button class="dark" onclick="addPanelButton()">+ Добавить кнопку</button>
+      </div>
+
+      <div class="blocks">
         <h3>Дополнительные блоки (+)</h3>
         <div id="extraBlocks"></div>
         <button class="dark" onclick="addBlock()">+ Добавить блок</button>
@@ -142,6 +150,7 @@
       <div id="p_order" class="btn">🧾 ORDER</div>
       <div id="p_support" class="btn">🛟 SUPPORT</div>
     </div>
+    <div id="panelButtonsPreview"></div>
     <div id="previewBlocks"></div>
 
     <div class="ticket-preview">
@@ -158,6 +167,7 @@ const fields=["name","channel_id","title","description","color_hex","image_url",
 fields.forEach(id=>{const el=document.getElementById(id); el.addEventListener('input', updatePreview); el.addEventListener('change', updatePreview);});
 
 let extraBlocks=[];
+let panelButtons=[];
 
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
@@ -186,7 +196,7 @@ function payload(){
     auto_gradient: chk('auto_gradient'), gradient_start_hex: val('gradient_start_hex').replace('#',''), gradient_end_hex: val('gradient_end_hex').replace('#',''),
     is_ticket_panel: chk('is_ticket_panel'), order_label: val('order_label'), order_emoji: val('order_emoji').trim(), order_style: val('order_style'),
     support_label: val('support_label'), support_emoji: val('support_emoji').trim(), support_style: val('support_style'),
-    auto_order_message: val('auto_order_message'), auto_support_message: val('auto_support_message'), extra_blocks: extraBlocks
+    auto_order_message: val('auto_order_message'), auto_support_message: val('auto_support_message'), panel_buttons: panelButtons, extra_blocks: extraBlocks
   };
 }
 
@@ -220,6 +230,31 @@ function insertLink(id){
   const link=`[${selected}](${url})`;
   t.value=t.value.slice(0,s)+link+t.value.slice(e);
   updatePreview();
+}
+
+
+function addPanelButton(btn){
+  panelButtons.push(btn||{label:'Новая кнопка',emoji:'',style:'secondary',action:'none',url:'',row:0});
+  renderPanelButtons(); updatePreview();
+}
+function removePanelButton(i){panelButtons.splice(i,1); renderPanelButtons(); updatePreview();}
+function renderPanelButtons(){
+  const root=document.getElementById('panelButtons'); root.innerHTML='';
+  panelButtons.forEach((b,i)=>{
+    const el=document.createElement('div'); el.className='block';
+    el.innerHTML=`
+      <div class="row"><div><label>Текст</label><input data-i="${i}" data-k="label" value="${escapeHtml(b.label||'')}"></div><div><label>Emoji</label><input data-i="${i}" data-k="emoji" value="${escapeHtml(b.emoji||'')}"></div></div>
+      <div class="row"><div><label>Style</label><select data-i="${i}" data-k="style"><option value="primary" ${b.style==='primary'?'selected':''}>primary</option><option value="success" ${b.style==='success'?'selected':''}>success</option><option value="secondary" ${!b.style||b.style==='secondary'?'selected':''}>secondary</option><option value="danger" ${b.style==='danger'?'selected':''}>danger</option></select></div><div><label>Action</label><select data-i="${i}" data-k="action"><option value="none" ${!b.action||b.action==='none'?'selected':''}>none</option><option value="order" ${b.action==='order'?'selected':''}>open ORDER</option><option value="support" ${b.action==='support'?'selected':''}>open SUPPORT</option><option value="url" ${b.action==='url'?'selected':''}>open URL</option></select></div></div>
+      <div class="row"><div><label>URL (для action=url)</label><input data-i="${i}" data-k="url" value="${escapeHtml(b.url||'')}"></div><div><label>Row (0-4)</label><input type="number" min="0" max="4" data-i="${i}" data-k="row" value="${Number.isFinite(+b.row)?+b.row:0}"></div></div>
+      <button class="dark" onclick="removePanelButton(${i})">Удалить кнопку</button>
+    `;
+    root.appendChild(el);
+  });
+  root.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',e=>{
+    const i=+e.target.dataset.i; const k=e.target.dataset.k;
+    panelButtons[i][k] = k==='row' ? parseInt(e.target.value||'0',10) : e.target.value;
+    updatePreview();
+  }));
 }
 
 function addBlock(block){
@@ -257,12 +292,30 @@ function updatePreview(){
   if(p.image_url){ if(p.image_position==='top'){top.src=p.image_url; top.style.display='block';} else {bot.src=p.image_url; bot.style.display='block';}}
 
   const btns=document.getElementById('btns');
+  const customBtnsRoot=document.getElementById('panelButtonsPreview');
   btns.style.display=p.is_ticket_panel?'flex':'none';
+  customBtnsRoot.innerHTML='';
   const o=document.getElementById('p_order'), s=document.getElementById('p_support');
   o.textContent=`${p.order_emoji ? p.order_emoji+' ' : ''}${p.order_label}`;
   s.textContent=`${p.support_emoji ? p.support_emoji+' ' : ''}${p.support_label}`;
   if(p.auto_gradient){o.style.background=`linear-gradient(135deg,#${p.gradient_start_hex},#${p.gradient_end_hex})`; s.style.background=`linear-gradient(135deg,#${p.gradient_end_hex},#${p.gradient_start_hex})`}
   else {o.style.background=styleColor(p.order_style); s.style.background=styleColor(p.support_style)}
+
+  if(p.is_ticket_panel && Array.isArray(p.panel_buttons) && p.panel_buttons.length){
+    btns.style.display='none';
+    const byRow={};
+    p.panel_buttons.forEach(b=>{const r=Math.max(0,Math.min(4,parseInt(b.row||0,10)||0)); (byRow[r]||(byRow[r]=[])).push(b);});
+    Object.keys(byRow).sort((a,b)=>+a-+b).forEach(r=>{
+      const row=document.createElement('div'); row.className='btn-row';
+      byRow[r].forEach(b=>{
+        const chip=document.createElement('div'); chip.className='btn-chip';
+        chip.style.background=styleColor(b.style||'secondary');
+        chip.textContent=`${b.emoji?b.emoji+' ':''}${b.label||'Button'}`;
+        row.appendChild(chip);
+      });
+      customBtnsRoot.appendChild(row);
+    });
+  }
 
   document.getElementById('p_order_ticket').innerHTML = markdownPreview((p.auto_order_message||'').replaceAll('{user}','@Noxi'));
   document.getElementById('p_support_ticket').innerHTML = markdownPreview((p.auto_support_message||'').replaceAll('{user}','@Noxi'));
@@ -299,13 +352,16 @@ async function loadPost(){
   if(d.error)return setStatus(JSON.stringify(d,null,2));
   fields.forEach(k=>{const el=document.getElementById(k); if(!el)return; if(el.type==='checkbox')el.checked=!!d[k]; else el.value=d[k]??''});
   extraBlocks = d.extra_blocks || [];
-  renderBlocks(); updatePreview(); setStatus('Загружено');
+  panelButtons = d.panel_buttons || [];
+  renderBlocks();
+  renderPanelButtons();
+  updatePreview(); setStatus('Загружено');
   await refreshTemplateSelect();
 }
 async function listPosts(){const r=await fetch('/api/posts'); const data=await r.json(); setStatus(JSON.stringify(data,null,2)); await refreshTemplateSelect();}
 function setStatus(x){document.getElementById('status').textContent=x}
 
-renderBlocks(); updatePreview(); refreshTemplateSelect();
+renderBlocks(); renderPanelButtons(); updatePreview(); refreshTemplateSelect();
 </script>
 </body>
 </html>

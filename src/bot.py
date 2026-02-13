@@ -76,6 +76,16 @@ class ExtraBlock:
 
 
 @dataclass
+class PanelButton:
+    label: str = "Button"
+    emoji: str = ""
+    style: str = "secondary"
+    action: str = "none"  # order | support | url | none
+    url: str | None = None
+    row: int = 0
+
+
+@dataclass
 class TicketBinding:
     ticket_channel_id: int
     opener_discord_id: int
@@ -111,6 +121,7 @@ class SavedPost:
     auto_order_message: str = "Спасибо за заказ! Опишите задачу и бюджет."
     auto_support_message: str = "Спасибо за обращение в саппорт! Опишите проблему подробно."
 
+    panel_buttons: list[PanelButton] = field(default_factory=list)
     extra_blocks: list[ExtraBlock] = field(default_factory=list)
 
 
@@ -176,6 +187,18 @@ def normalize_saved_post(raw: dict) -> SavedPost:
             clean_block = {k: v for k, v in block.items() if k in block_allowed}
             blocks.append(ExtraBlock(**clean_block))
 
+    raw_panel_buttons = data.get("panel_buttons", []) or []
+    panel_buttons: list[PanelButton] = []
+    for btn in raw_panel_buttons:
+        if isinstance(btn, dict):
+            btn_allowed = {f.name for f in fields(PanelButton)}
+            clean_btn = {k: v for k, v in btn.items() if k in btn_allowed}
+            try:
+                clean_btn["row"] = int(clean_btn.get("row", 0))
+            except Exception:
+                clean_btn["row"] = 0
+            panel_buttons.append(PanelButton(**clean_btn))
+
     if split_enabled and (split_title or split_description):
         blocks.append(
             ExtraBlock(
@@ -187,6 +210,7 @@ def normalize_saved_post(raw: dict) -> SavedPost:
             )
         )
 
+    data["panel_buttons"] = panel_buttons
     data["extra_blocks"] = blocks
     data["order_style"] = normalize_style_name(str(data.get("order_style", "success")))
     data["support_style"] = normalize_style_name(str(data.get("support_style", "primary")))
@@ -361,29 +385,51 @@ class TicketOpenView(discord.ui.View):
         self.bot = bot
         self.post = post
 
-        order_btn = discord.ui.Button(
-            label=post.order_label,
-            emoji=(post.order_emoji or None),
-            style=style_from_name(post.order_style),
-            custom_id=f"order:{post.name}",
-        )
-        support_btn = discord.ui.Button(
-            label=post.support_label,
-            emoji=(post.support_emoji or None),
-            style=style_from_name(post.support_style),
-            custom_id=f"support:{post.name}",
-        )
+        buttons = list(post.panel_buttons)
+        if not buttons:
+            buttons = [
+                PanelButton(label=post.order_label, emoji=(post.order_emoji or ""), style=post.order_style, action="order", row=0),
+                PanelButton(label=post.support_label, emoji=(post.support_emoji or ""), style=post.support_style, action="support", row=0),
+            ]
 
-        async def order_cb(interaction: discord.Interaction) -> None:
-            await self._safe_create(interaction, "order")
+        buttons.sort(key=lambda b: int(b.row) if isinstance(b.row, int) else 0)
+        for i, cfg in enumerate(buttons):
+            action = str(cfg.action or "none").strip().lower()
+            row = int(cfg.row) if isinstance(cfg.row, int) else 0
+            if row < 0:
+                row = 0
+            if row > 4:
+                row = 4
 
-        async def support_cb(interaction: discord.Interaction) -> None:
-            await self._safe_create(interaction, "support")
+            if action == "url" and cfg.url:
+                btn = discord.ui.Button(
+                    label=cfg.label or "Open",
+                    emoji=(cfg.emoji or None),
+                    style=ButtonStyle.link,
+                    url=cfg.url,
+                    row=row,
+                )
+                self.add_item(btn)
+                continue
 
-        order_btn.callback = order_cb
-        support_btn.callback = support_cb
-        self.add_item(order_btn)
-        self.add_item(support_btn)
+            btn = discord.ui.Button(
+                label=cfg.label or "Action",
+                emoji=(cfg.emoji or None),
+                style=style_from_name(cfg.style),
+                custom_id=f"panel:{post.name}:{i}",
+                row=row,
+            )
+
+            if action == "order":
+                async def cb(interaction: discord.Interaction, ticket_type: str = "order") -> None:
+                    await self._safe_create(interaction, ticket_type)
+                btn.callback = cb
+                self.add_item(btn)
+            elif action == "support":
+                async def cb(interaction: discord.Interaction, ticket_type: str = "support") -> None:
+                    await self._safe_create(interaction, ticket_type)
+                btn.callback = cb
+                self.add_item(btn)
 
     async def _safe_create(self, interaction: discord.Interaction, ticket_type: str) -> None:
         try:
@@ -966,7 +1012,26 @@ async def tg_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -
 
 
 def parse_post_json(data: dict) -> SavedPost:
-    blocks = [ExtraBlock(**b) for b in data.get("extra_blocks", [])]
+    blocks = [ExtraBlock(**b) for b in data.get("extra_blocks", []) if isinstance(b, dict)]
+    panel_buttons: list[PanelButton] = []
+    for b in data.get("panel_buttons", []) or []:
+        if not isinstance(b, dict):
+            continue
+        try:
+            row = int(b.get("row", 0))
+        except Exception:
+            row = 0
+        panel_buttons.append(
+            PanelButton(
+                label=str(b.get("label", "Button")),
+                emoji=str(b.get("emoji", "")).strip(),
+                style=normalize_style_name(str(b.get("style", "secondary"))),
+                action=str(b.get("action", "none")).strip().lower(),
+                url=str(b.get("url", "")).strip() or None,
+                row=max(0, min(4, row)),
+            )
+        )
+
     post = SavedPost(
         name=str(data["name"]).strip().lower(),
         channel_id=int(data["channel_id"]),
@@ -987,6 +1052,7 @@ def parse_post_json(data: dict) -> SavedPost:
         gradient_end_hex=str(data.get("gradient_end_hex", "5865F2")),
         auto_order_message=str(data.get("auto_order_message", "")),
         auto_support_message=str(data.get("auto_support_message", "")),
+        panel_buttons=panel_buttons,
         extra_blocks=blocks,
         last_message_id=int(data["last_message_id"]) if data.get("last_message_id") else None,
     )
