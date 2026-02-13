@@ -268,16 +268,27 @@ class TgRoleStore(JsonStore):
     def __init__(self, path: Path):
         super().__init__(path)
         self.roles: dict[int, str] = {}
+        self.role_chats: dict[int, int] = {}
         self.load()
 
     def load(self) -> None:
-        self.roles = {int(k): str(v) for k, v in self._load().get("roles", {}).items()}
+        data = self._load()
+        self.roles = {int(k): str(v) for k, v in data.get("roles", {}).items()}
+        self.role_chats = {
+            int(k): int(v) for k, v in data.get("role_chats", {}).items()
+        }
 
     def save(self) -> None:
-        self._save({"roles": self.roles})
+        self._save({"roles": self.roles, "role_chats": self.role_chats})
 
-    def set_role(self, tg_user_id: int, role: str) -> None:
+    def set_role(self, tg_user_id: int, role: str, chat_id: int | None = None) -> None:
         self.roles[tg_user_id] = role
+        if chat_id is not None:
+            self.role_chats[tg_user_id] = chat_id
+        self.save()
+
+    def register_chat(self, tg_user_id: int, chat_id: int) -> None:
+        self.role_chats[tg_user_id] = chat_id
         self.save()
 
     def get_role(self, tg_user_id: int) -> str:
@@ -285,6 +296,13 @@ class TgRoleStore(JsonStore):
 
     def users_with_roles(self, allowed: set[str]) -> list[int]:
         return [uid for uid, role in self.roles.items() if role in allowed]
+
+    def chats_with_roles(self, allowed: set[str]) -> set[int]:
+        out: set[int] = set()
+        for uid, role in self.roles.items():
+            if role in allowed and uid in self.role_chats:
+                out.add(self.role_chats[uid])
+        return out
 
 
 class CloseTicketButton(discord.ui.View):
@@ -399,18 +417,21 @@ class BridgeBot(commands.Bot):
 
     async def notify_ticket(self, ticket_type: str, opener_discord_id: int, text: str) -> None:
         targets: set[int] = set()
+
         opener_chat = self.user_links.get_tg_chat(opener_discord_id)
         if opener_chat:
             targets.add(opener_chat)
 
-        staff_roles = {"admin", "manager"}
-        staff_user_ids = self.tg_roles.users_with_roles(staff_roles)
-        for tg_user_id in staff_user_ids:
-            targets.add(tg_user_id)
+        # Always notify TG admins (interpreted as user/chat IDs in private dialogs)
+        targets.update(TG_ADMIN_IDS)
 
+        # Notify role-registered chats
+        targets.update(self.tg_roles.chats_with_roles({"admin", "manager"}))
         if ticket_type == "order":
-            for tg_user_id in self.tg_roles.users_with_roles({"builder"}):
-                targets.add(tg_user_id)
+            targets.update(self.tg_roles.chats_with_roles({"builder"}))
+
+        if not targets:
+            logger.warning("No Telegram targets for ticket notification: %s", text)
 
         for chat_id in targets:
             try:
@@ -543,7 +564,8 @@ async def tg_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         update,
         "Команды:\n"
         "/bind_discord <discord_user_id>\n"
-        "/set_role <tg_user_id> <admin|manager|builder|viewer>\n"
+        "/set_role <tg_user_id> <admin|manager|builder|viewer> [chat_id]\n"
+        "/register_me <role> - зарегистрировать себя и чат для уведомлений\n"
         "/my_role\n"
         "/post_save <name> <channel_id> title|description|color_hex|image_url?\n"
         "/post_send <name>\n"
@@ -559,6 +581,8 @@ async def tg_bind_discord(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         discord_user_id = int(context.args[0])
         bot.user_links.link(discord_user_id, update.effective_chat.id)
+        if update.effective_user:
+            bot.tg_roles.register_chat(update.effective_user.id, update.effective_chat.id)
         await tg_reply(update, f"Привязано ✅ discord={discord_user_id} -> tg_chat={update.effective_chat.id}")
     except Exception as exc:
         await tg_reply(update, f"Ошибка: {exc}")
@@ -569,22 +593,47 @@ async def tg_set_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not can_manage_roles(update):
         await tg_reply(update, "Нет прав. Добавь свой TG user id в TG_ADMIN_IDS")
         return
-    if len(context.args) != 2:
-        await tg_reply(update, "Пример: /set_role 123456789 manager")
+    if len(context.args) not in {2, 3}:
+        await tg_reply(update, "Пример: /set_role 123456789 manager [chat_id]")
         return
     tg_user_id = int(context.args[0])
     role = context.args[1].lower()
+    chat_id = int(context.args[2]) if len(context.args) == 3 else None
     if role not in {"admin", "manager", "builder", "viewer"}:
         await tg_reply(update, "Роль: admin|manager|builder|viewer")
         return
-    bot.tg_roles.set_role(tg_user_id, role)
-    await tg_reply(update, f"OK: {tg_user_id} -> {role}")
+    bot.tg_roles.set_role(tg_user_id, role, chat_id=chat_id)
+    msg = f"OK: {tg_user_id} -> {role}" + (f", chat_id={chat_id}" if chat_id is not None else "")
+    await tg_reply(update, msg)
 
 
 async def tg_my_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bot: BridgeBot = context.application.bot_data["discord_bot"]
     uid = update.effective_user.id if update.effective_user else 0
     await tg_reply(update, f"Твоя роль: {bot.tg_roles.get_role(uid)}")
+
+async def tg_register_me(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    bot: BridgeBot = context.application.bot_data["discord_bot"]
+    if not update.effective_user or not update.effective_chat:
+        return
+    if len(context.args) != 1:
+        await tg_reply(update, "Пример: /register_me builder")
+        return
+
+    role = context.args[0].lower().strip()
+    if role not in {"admin", "manager", "builder", "viewer"}:
+        await tg_reply(update, "Роль: admin|manager|builder|viewer")
+        return
+
+    # regular users can self-register only viewer/builder; admin/manager only via /set_role
+    if role in {"admin", "manager"} and not can_manage_roles(update):
+        await tg_reply(update, "Эту роль выдает только админ")
+        return
+
+    bot.tg_roles.set_role(update.effective_user.id, role, update.effective_chat.id)
+    await tg_reply(update, f"Зарегистрирован ✅ role={role}, chat_id={update.effective_chat.id}")
+
+
 
 
 def parse_post_args(raw: str) -> tuple[str, str, str, str | None]:
@@ -770,6 +819,7 @@ async def run() -> None:
     tg_app.add_handler(CommandHandler("start", tg_start))
     tg_app.add_handler(CommandHandler("bind_discord", tg_bind_discord))
     tg_app.add_handler(CommandHandler("set_role", tg_set_role))
+    tg_app.add_handler(CommandHandler("register_me", tg_register_me))
     tg_app.add_handler(CommandHandler("my_role", tg_my_role))
     tg_app.add_handler(CommandHandler("post_save", tg_post_save))
     tg_app.add_handler(CommandHandler("post_send", tg_post_send))
@@ -781,6 +831,7 @@ async def run() -> None:
             BotCommand("start", "Показать команды"),
             BotCommand("bind_discord", "Привязать Discord пользователя"),
             BotCommand("set_role", "Назначить роль пользователю TG"),
+            BotCommand("register_me", "Зарегистрировать себя для уведомлений"),
             BotCommand("my_role", "Показать мою роль"),
             BotCommand("post_save", "Сохранить и отправить шаблон"),
             BotCommand("post_send", "Опубликовать сохраненный шаблон"),

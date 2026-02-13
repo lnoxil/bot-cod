@@ -1,29 +1,28 @@
 # Discord ↔ Telegram Ticket Bridge + Advanced Web Editor
 
-Сделано под твой запрос:
-- полноценный редактор поста на сайте с live preview;
-- форматирование выделенного текста (bold/italic/underline/strike/code/quote);
-- фото можно ставить сверху или снизу;
-- градиент для боковой линии и кнопок (preview + авто-подбор цвета в Discord embed);
-- кнопки ORDER/SUPPORT полностью настраиваемые (цвет/текст/emoji);
-- добавление дополнительных блоков поста через `+` (одной публикацией отправляются все блоки);
-- персональные Telegram уведомления (бот пишет человеку, а не в общий чат);
-- роли Telegram: `admin`, `manager`, `builder`, `viewer`;
-- заказы/тикеты отправляются в ЛС привязанным пользователям и staff ролям;
-- канал тикета в Discord создается с ником пользователя.
+Исправления по уведомлениям:
+- уведомления о новых ORDER/SUPPORT тикетах теперь идут в Telegram **привязанному пользователю**,
+- также идут staff-ролям (admin/manager, и builder для ORDER),
+- добавлен self-registration в Telegram через `/register_me`.
 
-## Важное изменение
-`TELEGRAM_CHAT_ID` убран из конфигурации.
-Теперь используется персональная маршрутизация через привязки и роли.
+## Почему раньше могло не приходить
+Если пользователь/роль не были привязаны к реальному `chat_id`, бот не знал куда слать DM.
+Теперь можно зарегистрировать чат напрямую и это сохраняется.
 
 ## Telegram команды
 - `/start`
-- `/bind_discord <discord_user_id>` — привязать Telegram чат к Discord пользователю
-- `/set_role <tg_user_id> <admin|manager|builder|viewer>` — назначить роль (только TG_ADMIN_IDS)
+- `/bind_discord <discord_user_id>`
+- `/register_me <admin|manager|builder|viewer>`
+- `/set_role <tg_user_id> <admin|manager|builder|viewer> [chat_id]`
 - `/my_role`
 - `/post_save <name> <channel_id> title|description|color_hex|image_url?`
 - `/post_send <name>`
 - `/reply_ticket <discord_channel_id> <text>`
+
+## Рекомендуемый сценарий настройки уведомлений
+1. Каждый сотрудник пишет боту в личку `/register_me manager` или `/register_me builder`.
+2. Клиент пишет боту в личку и делает `/bind_discord <его_discord_id>`.
+3. При открытии тикета уведомления уходят в ЛС нужным людям.
 
 ## .env
 ```env
@@ -31,8 +30,6 @@ DISCORD_TOKEN=
 TELEGRAM_TOKEN=
 TG_ADMIN_IDS=123456789,987654321
 ```
-
-Остальное см. в `.env.example`.
 
 ## Запуск
 ```bash
