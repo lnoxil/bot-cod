@@ -444,7 +444,7 @@ def parse_button_tags(text: str, *, default_row: int = 0) -> tuple[str, list[Pan
         if action == "url":
             url = extra or None
             if not url:
-                return f"**[{label}]**"
+                return f"{(emoji + ' ' ) if emoji else ''}{label}"
 
         if action not in {"order", "support", "url"}:
             return match.group(0)
@@ -459,7 +459,7 @@ def parse_button_tags(text: str, *, default_row: int = 0) -> tuple[str, list[Pan
                 row=row,
             )
         )
-        return f"**[{(emoji + ' ') if emoji else ''}{label}]**"
+        return f"{(emoji + ' ') if emoji else ''}{label}"
 
     cleaned = BUTTON_TAG_RE.sub(_repl, text)
     return cleaned, out_buttons
