@@ -73,7 +73,7 @@
         <button onclick="insertButtonTag('description')">BtnTag</button>
       </div>
       <textarea id="description">🎁: We work with projects of any complexity and are ready to create something amazing for you</textarea>
-      <small style="color:#9aa7b8">Тег кнопки: <code>{{btn:Текст|order|success|inline|🛒}}</code> или <code>{{btn:Verify|url|secondary|bottom||https://site.com}}</code>.</small>
+      <small style="color:#9aa7b8">Тег кнопки: <code>{{btn:Текст|order|success|inline|🛒}}</code>, <code>{{btn:Get Support|support|secondary|row1}}</code> или <code>{{btn:Verify|url|secondary|bottom||https://site.com}}</code>.</small>
 
       <div class="row">
         <div><label>Image URL</label><input id="image_url" placeholder="https://..."></div>
@@ -245,7 +245,7 @@ function insertButtonTag(id){
   const label=prompt('Текст кнопки', 'Start My Project') || 'Button';
   const action=(prompt('Действие: order | support | url', 'order') || 'order').trim();
   const style=(prompt('Стиль: primary | success | secondary | danger', 'success') || 'secondary').trim();
-  const pos=(prompt('Позиция: inline | bottom', 'inline') || 'inline').trim();
+  const pos=(prompt('Позиция: inline | bottom | row0..row4', 'inline') || 'inline').trim();
   const emoji=(prompt('Emoji (можно пусто)', '') || '').trim();
   let extra='';
   if(action==='url') extra=(prompt('URL для кнопки', 'https://example.com') || '').trim();

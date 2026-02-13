@@ -399,29 +399,49 @@ def parse_button_tags(text: str, *, default_row: int = 0) -> tuple[str, list[Pan
         return text, []
 
     out_buttons: list[PanelButton] = []
-    row_cursor = max(0, min(4, default_row))
+    base_row = max(0, min(4, default_row))
+
+    action_aliases = {
+        "order": "order",
+        "ticket": "order",
+        "заказ": "order",
+        "support": "support",
+        "help": "support",
+        "саппорт": "support",
+        "поддержка": "support",
+        "url": "url",
+        "link": "url",
+        "ссылка": "url",
+    }
+
+    def _resolve_row(pos: str) -> int:
+        p = (pos or "inline").strip().lower()
+        if p == "bottom":
+            return 4
+        if p.startswith("row"):
+            n = p[3:].strip()
+            if n.isdigit():
+                return max(0, min(4, int(n)))
+        return base_row
 
     def _repl(match: re.Match[str]) -> str:
-        nonlocal row_cursor
         raw = match.group(1).strip()
         parts = [x.strip() for x in raw.split("|")]
         if len(parts) < 2:
             return match.group(0)
 
         label = parts[0] or "Button"
-        action = parts[1].lower()
+        action_raw = parts[1].lower()
+        action = action_aliases.get(action_raw, action_raw)
         style = normalize_style_name(parts[2]) if len(parts) > 2 and parts[2] else "secondary"
-        pos = (parts[3].lower() if len(parts) > 3 and parts[3] else "inline")
+        pos = parts[3] if len(parts) > 3 else "inline"
         emoji = parts[4] if len(parts) > 4 else ""
         extra = parts[5] if len(parts) > 5 else ""
 
-        row = 4 if pos == "bottom" else row_cursor
-        if pos != "bottom":
-            row_cursor = min(4, row_cursor + 1)
+        row = _resolve_row(pos)
 
         url: str | None = None
-        if action in {"url", "link"}:
-            action = "url"
+        if action == "url":
             url = extra or None
             if not url:
                 return f"**[{label}]**"
@@ -436,7 +456,7 @@ def parse_button_tags(text: str, *, default_row: int = 0) -> tuple[str, list[Pan
                 style=style,
                 action=action,
                 url=url,
-                row=max(0, min(4, row)),
+                row=row,
             )
         )
         return f"**[{(emoji + ' ') if emoji else ''}{label}]**"
