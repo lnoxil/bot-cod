@@ -2,11 +2,13 @@ import asyncio
 import json
 import logging
 import os
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import discord
 from aiohttp import web
+from discord import ButtonStyle
 from discord.ext import commands
 from dotenv import load_dotenv
 from telegram import BotCommand, Update
@@ -42,6 +44,7 @@ ORDER_PREFIX = os.getenv("ORDER_CHANNEL_PREFIX", "order")
 SUPPORT_PREFIX = os.getenv("SUPPORT_CHANNEL_PREFIX", "support")
 STATE_FILE = Path(os.getenv("STATE_FILE", "state/tickets.json"))
 POSTS_FILE = Path(os.getenv("POSTS_FILE", "state/posts.json"))
+USER_LINKS_FILE = Path(os.getenv("USER_LINKS_FILE", "state/user_links.json"))
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT = env_int("WEB_PORT", 8080) or 8080
 EDITOR_HTML_PATH = Path(os.getenv("EDITOR_HTML_PATH", "web/editor.html"))
@@ -65,6 +68,22 @@ class SavedPost:
     image_url: str | None = None
     last_message_id: int | None = None
     is_ticket_panel: bool = False
+
+    order_label: str = "ORDER"
+    order_emoji: str = "🧾"
+    order_style: str = "success"
+
+    support_label: str = "SUPPORT"
+    support_emoji: str = "🛟"
+    support_style: str = "primary"
+
+    split_enabled: bool = False
+    split_title: str = ""
+    split_description: str = ""
+    split_color_hex: str = "2ECC71"
+
+    auto_order_message: str = "Спасибо за заказ! Опишите задачу и бюджет."
+    auto_support_message: str = "Спасибо за обращение в саппорт! Опишите проблему подробно."
 
 
 class JsonStore:
@@ -136,6 +155,58 @@ class PostStore(JsonStore):
         return [self._posts[name] for name in sorted(self._posts.keys())]
 
 
+class UserLinkStore(JsonStore):
+    def __init__(self, path: Path):
+        super().__init__(path)
+        self.discord_to_tg: dict[int, int] = {}
+        self.tg_to_discord: dict[int, int] = {}
+        self.load()
+
+    def load(self) -> None:
+        data = self._load()
+        self.discord_to_tg = {int(k): int(v) for k, v in data.get("discord_to_tg", {}).items()}
+        self.tg_to_discord = {int(k): int(v) for k, v in data.get("tg_to_discord", {}).items()}
+
+    def save(self) -> None:
+        self._save(
+            {
+                "discord_to_tg": self.discord_to_tg,
+                "tg_to_discord": self.tg_to_discord,
+            }
+        )
+
+    def link(self, discord_user_id: int, tg_chat_id: int, tg_user_id: int) -> None:
+        self.discord_to_tg[discord_user_id] = tg_chat_id
+        self.tg_to_discord[tg_user_id] = discord_user_id
+        self.save()
+
+    def get_tg_chat_by_discord(self, discord_user_id: int) -> int | None:
+        return self.discord_to_tg.get(discord_user_id)
+
+
+def parse_channel_id(raw: str) -> int:
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError("channel_id должен быть числом") from exc
+
+
+def style_from_name(name: str) -> ButtonStyle:
+    mapping = {
+        "primary": ButtonStyle.primary,
+        "secondary": ButtonStyle.secondary,
+        "success": ButtonStyle.success,
+        "danger": ButtonStyle.danger,
+        "link": ButtonStyle.secondary,
+    }
+    return mapping.get(name.lower(), ButtonStyle.secondary)
+
+
+def sanitize_channel_name(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9\-_]", "-", value).strip("-").lower()
+    return cleaned or "user"
+
+
 class CloseTicketButton(discord.ui.View):
     def __init__(self, bot: "BridgeBot"):
         super().__init__(timeout=None)
@@ -159,53 +230,63 @@ class CloseTicketButton(discord.ui.View):
             )
             return
 
-        if (
-            isinstance(interaction.user, discord.Member)
-            and SUPPORT_ROLE_ID
-            and SUPPORT_ROLE_ID not in [r.id for r in interaction.user.roles]
-            and interaction.user.id != binding.opener_discord_id
-        ):
-            await interaction.response.send_message(
-                "Закрыть тикет может саппорт или создатель.", ephemeral=True
-            )
-            return
-
         await interaction.response.send_message("Тикет закрывается…", ephemeral=True)
-        await self.bot.notify_telegram(f"🔒 Тикет закрыт: #{interaction.channel.name}")
+        await self.bot.notify_telegram(
+            f"🔒 Тикет закрыт: #{interaction.channel.name}",
+            opener_discord_id=binding.opener_discord_id,
+        )
         self.bot.ticket_store.remove(interaction.channel.id)
         await interaction.channel.delete(reason="Ticket closed")
 
 
 class TicketOpenView(discord.ui.View):
-    def __init__(self, bot: "BridgeBot"):
+    def __init__(self, bot: "BridgeBot", post: SavedPost | None = None):
         super().__init__(timeout=None)
         self.bot = bot
+        self.post = post or SavedPost(
+            name="default",
+            channel_id=0,
+            title="",
+            description="",
+        )
 
-    @discord.ui.button(
-        label="Order",
-        style=discord.ButtonStyle.success,
-        custom_id="ticket_order",
-        emoji="🧾",
-    )
-    async def open_order(
-        self, interaction: discord.Interaction, _: discord.ui.Button
-    ) -> None:
-        await self.bot.create_ticket(interaction, "order")
+        self.add_item(
+            discord.ui.Button(
+                label=self.post.order_label,
+                emoji=self.post.order_emoji,
+                style=style_from_name(self.post.order_style),
+                custom_id=f"order_btn:{self.post.name}",
+            )
+        )
+        self.add_item(
+            discord.ui.Button(
+                label=self.post.support_label,
+                emoji=self.post.support_emoji,
+                style=style_from_name(self.post.support_style),
+                custom_id=f"support_btn:{self.post.name}",
+            )
+        )
 
-    @discord.ui.button(
-        label="Support",
-        style=discord.ButtonStyle.primary,
-        custom_id="ticket_support",
-        emoji="🛟",
-    )
-    async def open_support(
-        self, interaction: discord.Interaction, _: discord.ui.Button
-    ) -> None:
-        await self.bot.create_ticket(interaction, "support")
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not interaction.data:
+            return False
+        custom_id = str(interaction.data.get("custom_id", ""))
+        if custom_id.startswith("order_btn:"):
+            await self.bot.create_ticket(interaction, "order", self.post)
+            return False
+        if custom_id.startswith("support_btn:"):
+            await self.bot.create_ticket(interaction, "support", self.post)
+            return False
+        return True
 
 
 class BridgeBot(commands.Bot):
-    def __init__(self, ticket_store: TicketStore, post_store: PostStore):
+    def __init__(
+        self,
+        ticket_store: TicketStore,
+        post_store: PostStore,
+        user_link_store: UserLinkStore,
+    ):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.guilds = True
@@ -213,27 +294,42 @@ class BridgeBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
         self.ticket_store = ticket_store
         self.post_store = post_store
+        self.user_link_store = user_link_store
         self.tg_app: Application | None = None
 
     async def setup_hook(self) -> None:
-        self.add_view(TicketOpenView(self))
         self.add_view(CloseTicketButton(self))
 
-    async def notify_telegram(self, text: str, thread_id: int | None = None) -> None:
+    async def notify_telegram(
+        self,
+        text: str,
+        thread_id: int | None = None,
+        opener_discord_id: int | None = None,
+    ) -> None:
         if not self.tg_app:
             return
-        try:
-            await self.tg_app.bot.send_message(
-                chat_id=TELEGRAM_CHAT_ID,
-                text=text,
-                message_thread_id=thread_id,
-                disable_web_page_preview=True,
-            )
-        except Exception:
-            logger.exception("Failed to notify Telegram")
+
+        chats: set[int] = set()
+        if TELEGRAM_CHAT_ID:
+            chats.add(TELEGRAM_CHAT_ID)
+        if opener_discord_id is not None:
+            linked = self.user_link_store.get_tg_chat_by_discord(opener_discord_id)
+            if linked:
+                chats.add(linked)
+
+        for chat_id in chats:
+            try:
+                await self.tg_app.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    message_thread_id=thread_id if chat_id == TELEGRAM_CHAT_ID else None,
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                logger.exception("Failed to notify Telegram chat_id=%s", chat_id)
 
     async def ensure_forum_thread(self, title: str) -> int | None:
-        if not self.tg_app:
+        if not self.tg_app or TELEGRAM_CHAT_ID is None:
             return None
         try:
             topic = await self.tg_app.bot.create_forum_topic(
@@ -245,22 +341,27 @@ class BridgeBot(commands.Bot):
             logger.warning("Forum topic unavailable, fallback to main chat")
             return None
 
-    async def create_ticket(self, interaction: discord.Interaction, ticket_type: str) -> None:
+    async def create_ticket(
+        self,
+        interaction: discord.Interaction,
+        ticket_type: str,
+        post: SavedPost | None = None,
+    ) -> None:
         if not interaction.guild or not interaction.channel or not interaction.user:
             return
         await interaction.response.defer(ephemeral=True)
 
         member = interaction.user
+        display = sanitize_channel_name(member.display_name)
+        prefix = ORDER_PREFIX if ticket_type == "order" else SUPPORT_PREFIX
+        channel_name = f"{prefix}-{display}"[:95]
+
         category = (
             interaction.guild.get_channel(TICKET_CATEGORY_ID)
             if TICKET_CATEGORY_ID
             else interaction.channel.category
         )
         support_role = interaction.guild.get_role(SUPPORT_ROLE_ID) if SUPPORT_ROLE_ID else None
-
-        prefix = ORDER_PREFIX if ticket_type == "order" else SUPPORT_PREFIX
-        channel_name = f"{prefix}-{member.name}".lower().replace(" ", "-")
-
         me = interaction.guild.me
         if not me:
             await interaction.followup.send("Ошибка: не найден bot member.", ephemeral=True)
@@ -300,24 +401,33 @@ class BridgeBot(commands.Bot):
             )
         )
 
-        embed = discord.Embed(
+        auto_message = ""
+        if post:
+            auto_message = (
+                post.auto_order_message
+                if ticket_type == "order"
+                else post.auto_support_message
+            )
+
+        base_embed = discord.Embed(
             title=f"{ticket_type.title()} ticket",
             description=(
                 f"Привет, {member.mention}! Опишите задачу, саппорт скоро ответит.\n"
-                "Можно отвечать прямо из Telegram-канала саппорта."
+                f"{auto_message}" if auto_message else f"Привет, {member.mention}! Опишите задачу, саппорт скоро ответит."
             ),
             color=0x5865F2,
         )
         mention = f"{member.mention} {support_role.mention}" if support_role else member.mention
-        await ticket_channel.send(content=mention, embed=embed, view=CloseTicketButton(self))
+        await ticket_channel.send(content=mention, embed=base_embed, view=CloseTicketButton(self))
 
         await self.notify_telegram(
             (
-                f"🆕 Новый {ticket_type.upper()} тикет\n"
-                f"Клиент: {member} ({member.id})\n"
+                f"🆕 Открыт тикет: {ticket_type.upper()}\n"
+                f"Пользователь: {member.display_name} ({member.id})\n"
                 f"Канал: #{ticket_channel.name} ({ticket_channel.id})"
             ),
             thread_id=thread_id,
+            opener_discord_id=member.id,
         )
         await interaction.followup.send(f"Тикет создан: {ticket_channel.mention}", ephemeral=True)
 
@@ -327,8 +437,44 @@ class BridgeBot(commands.Bot):
         binding = self.ticket_store.get(message.channel.id)
         if binding:
             text = f"💬 Discord #{message.channel.name}\n{message.author.display_name}: {message.content}"
-            await self.notify_telegram(text, thread_id=binding.telegram_thread_id)
+            await self.notify_telegram(
+                text,
+                thread_id=binding.telegram_thread_id,
+                opener_discord_id=binding.opener_discord_id,
+            )
         await self.process_commands(message)
+
+
+def post_to_embeds(post: SavedPost) -> list[discord.Embed]:
+    main_color = int(post.color_hex.strip("#"), 16)
+    embeds = [
+        discord.Embed(title=post.title, description=post.description, color=main_color)
+    ]
+    if post.image_url:
+        embeds[0].set_image(url=post.image_url)
+
+    if post.split_enabled and (post.split_title or post.split_description):
+        split_color = int(post.split_color_hex.strip("#"), 16)
+        embeds.append(
+            discord.Embed(
+                title=post.split_title or "Продолжение",
+                description=post.split_description,
+                color=split_color,
+            )
+        )
+    return embeds
+
+
+async def publish_saved_post(bot: BridgeBot, post: SavedPost) -> discord.Message:
+    channel = bot.get_channel(post.channel_id)
+    if not isinstance(channel, discord.TextChannel):
+        raise ValueError(f"Канал {post.channel_id} не найден")
+
+    embeds = post_to_embeds(post)
+    if post.is_ticket_panel:
+        view = TicketOpenView(bot, post)
+        return await channel.send(embeds=embeds, view=view)
+    return await channel.send(embeds=embeds)
 
 
 def parse_pipe_payload(raw: str, min_parts: int) -> list[str]:
@@ -344,96 +490,32 @@ async def tg_reply(update: Update, text: str) -> None:
         await msg.reply_text(text)
 
 
-def parse_channel_id(raw: str) -> int:
-    try:
-        return int(raw)
-    except ValueError as exc:
-        raise ValueError("channel_id должен быть числом") from exc
-
-
-def post_to_embed(post: SavedPost) -> discord.Embed:
-    color = int(post.color_hex.strip("#"), 16)
-    embed = discord.Embed(title=post.title, description=post.description, color=color)
-    if post.image_url:
-        embed.set_image(url=post.image_url)
-    return embed
-
-
-async def publish_saved_post(bot: BridgeBot, post: SavedPost) -> discord.Message:
-    channel = bot.get_channel(post.channel_id)
-    if not isinstance(channel, discord.TextChannel):
-        raise ValueError(f"Канал {post.channel_id} не найден")
-
-    embed = post_to_embed(post)
-    if post.is_ticket_panel:
-        return await channel.send(embed=embed, view=TicketOpenView(bot))
-    return await channel.send(embed=embed)
-
-
 async def tg_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await tg_reply(
         update,
-        "Готово. Команды:\n"
-        "/panel <channel_id> title|description|image_url?\n"
-        "/post <channel_id> title|description|color_hex|image_url?\n"
+        "Команды:\n"
+        "/bind_discord <discord_user_id> - привязать Telegram к Discord пользователю\n"
         "/post_save <name> <channel_id> title|description|color_hex|image_url?\n"
         "/post_send <name>\n"
-        "/post_edit <name> <field> <value> (field: title, description, color, image, channel_id, panel)\n"
-        "/post_show <name>\n"
-        "/post_list\n"
-        "WEB editor: http://<server>:8080",
+        "/post_edit <name> <field> <value> (title, description, color, image, channel_id, panel)",
     )
 
 
-async def tg_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def tg_bind_discord(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bot: BridgeBot = context.application.bot_data["discord_bot"]
-    if len(context.args) < 2:
-        await tg_reply(update, "Пример: /panel 123456789 title|desc|image_url")
+    if not update.effective_chat or not update.effective_user:
         return
-
-    try:
-        channel_id = parse_channel_id(context.args[0])
-        payload = " ".join(context.args[1:])
-        parts = parse_pipe_payload(payload, 2)
-        title, description = parts[0], parts[1]
-        image_url = parts[2] if len(parts) > 2 and parts[2] else None
-
-        channel = bot.get_channel(channel_id)
-        if not isinstance(channel, discord.TextChannel):
-            await tg_reply(update, "Канал не найден")
-            return
-
-        embed = discord.Embed(title=title, description=description, color=0x2ECC71)
-        if image_url:
-            embed.set_image(url=image_url)
-        await channel.send(embed=embed, view=TicketOpenView(bot))
-        await tg_reply(update, "Панель отправлена в Discord ✅")
-    except Exception as exc:
-        await tg_reply(update, f"Ошибка: {exc}")
-
-
-async def tg_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    bot: BridgeBot = context.application.bot_data["discord_bot"]
-    if len(context.args) < 2:
-        await tg_reply(update, "Пример: /post 123 title|desc|ff9900|https://img...")
+    if len(context.args) != 1:
+        await tg_reply(update, "Пример: /bind_discord 123456789012345678")
         return
-
     try:
-        channel_id = parse_channel_id(context.args[0])
-        payload = " ".join(context.args[1:])
-        title, description, color_hex, *rest = parse_pipe_payload(payload, 3)
-        image_url = rest[0] if rest and rest[0] else None
-        post = SavedPost(
-            name="temp",
-            channel_id=channel_id,
-            title=title,
-            description=description,
-            color_hex=color_hex,
-            image_url=image_url,
-            is_ticket_panel=False,
+        discord_user_id = int(context.args[0])
+        bot.user_link_store.link(
+            discord_user_id=discord_user_id,
+            tg_chat_id=update.effective_chat.id,
+            tg_user_id=update.effective_user.id,
         )
-        await publish_saved_post(bot, post)
-        await tg_reply(update, "Пост отправлен ✅")
+        await tg_reply(update, f"Привязано ✅ Discord {discord_user_id} -> TG chat {update.effective_chat.id}")
     except Exception as exc:
         await tg_reply(update, f"Ошибка: {exc}")
 
@@ -441,19 +523,13 @@ async def tg_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def tg_post_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bot: BridgeBot = context.application.bot_data["discord_bot"]
     if len(context.args) < 3:
-        await tg_reply(
-            update,
-            "Пример: /post_save zen_panel 123 title|desc|2ECC71|https://img...",
-        )
+        await tg_reply(update, "Пример: /post_save name 123 title|desc|2ECC71|https://img")
         return
-
     try:
         name = context.args[0].strip().lower()
         channel_id = parse_channel_id(context.args[1])
-        payload = " ".join(context.args[2:])
-        title, description, color_hex, *rest = parse_pipe_payload(payload, 3)
+        title, description, color_hex, *rest = parse_pipe_payload(" ".join(context.args[2:]), 3)
         image_url = rest[0] if rest and rest[0] else None
-
         post = SavedPost(
             name=name,
             channel_id=channel_id,
@@ -461,15 +537,11 @@ async def tg_post_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             description=description,
             color_hex=color_hex,
             image_url=image_url,
-            is_ticket_panel=False,
         )
         msg = await publish_saved_post(bot, post)
         post.last_message_id = msg.id
         bot.post_store.set(post)
-        await tg_reply(
-            update,
-            f"Сохранено и отправлено ✅\nname={post.name}\nchannel_id={post.channel_id}\nmessage_id={post.last_message_id}",
-        )
+        await tg_reply(update, f"Сохранено и отправлено ✅\nchannel_id={channel_id}\nmessage_id={msg.id}")
     except Exception as exc:
         await tg_reply(update, f"Ошибка: {exc}")
 
@@ -477,15 +549,12 @@ async def tg_post_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def tg_post_send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bot: BridgeBot = context.application.bot_data["discord_bot"]
     if len(context.args) != 1:
-        await tg_reply(update, "Пример: /post_send zen_panel")
+        await tg_reply(update, "Пример: /post_send name")
         return
-
-    name = context.args[0].strip().lower()
-    post = bot.post_store.get(name)
+    post = bot.post_store.get(context.args[0].strip().lower())
     if not post:
         await tg_reply(update, "Шаблон не найден")
         return
-
     try:
         msg = await publish_saved_post(bot, post)
         post.last_message_id = msg.id
@@ -495,53 +564,11 @@ async def tg_post_send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await tg_reply(update, f"Ошибка: {exc}")
 
 
-async def tg_post_show(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    bot: BridgeBot = context.application.bot_data["discord_bot"]
-    if len(context.args) != 1:
-        await tg_reply(update, "Пример: /post_show zen_panel")
-        return
-
-    name = context.args[0].strip().lower()
-    post = bot.post_store.get(name)
-    if not post:
-        await tg_reply(update, "Шаблон не найден")
-        return
-
-    await tg_reply(
-        update,
-        (
-            f"name={post.name}\n"
-            f"channel_id={post.channel_id}\n"
-            f"title={post.title}\n"
-            f"description={post.description}\n"
-            f"color=#{post.color_hex.strip('#')}\n"
-            f"image={post.image_url or '-'}\n"
-            f"is_ticket_panel={post.is_ticket_panel}\n"
-            f"last_message_id={post.last_message_id or '-'}"
-        ),
-    )
-
-
-async def tg_post_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    bot: BridgeBot = context.application.bot_data["discord_bot"]
-    posts = bot.post_store.list_posts()
-    if not posts:
-        await tg_reply(update, "Шаблонов пока нет")
-        return
-    lines = [f"- {post.name} (channel_id={post.channel_id}, panel={post.is_ticket_panel})" for post in posts]
-    await tg_reply(update, "Шаблоны:\n" + "\n".join(lines))
-
-
 async def tg_post_edit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     bot: BridgeBot = context.application.bot_data["discord_bot"]
     if len(context.args) < 3:
-        await tg_reply(
-            update,
-            "Пример: /post_edit zen_panel description Новый текст\n"
-            "Поля: title, description, color, image, channel_id, panel",
-        )
+        await tg_reply(update, "Пример: /post_edit name field value")
         return
-
     name = context.args[0].strip().lower()
     field = context.args[1].strip().lower()
     value = " ".join(context.args[2:]).strip()
@@ -550,28 +577,24 @@ async def tg_post_edit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await tg_reply(update, "Шаблон не найден")
         return
 
-    try:
-        if field == "title":
-            post.title = value
-        elif field == "description":
-            post.description = value
-        elif field == "color":
-            int(value.strip("#"), 16)
-            post.color_hex = value
-        elif field == "image":
-            post.image_url = value if value not in {"-", "none", "null"} else None
-        elif field == "channel_id":
-            post.channel_id = parse_channel_id(value)
-        elif field == "panel":
-            post.is_ticket_panel = value.lower() in {"1", "true", "yes", "on"}
-        else:
-            await tg_reply(update, "Неизвестное поле")
-            return
+    if field == "title":
+        post.title = value
+    elif field == "description":
+        post.description = value
+    elif field == "color":
+        post.color_hex = value
+    elif field == "image":
+        post.image_url = value if value not in {"-", "none", "null"} else None
+    elif field == "channel_id":
+        post.channel_id = parse_channel_id(value)
+    elif field == "panel":
+        post.is_ticket_panel = value.lower() in {"1", "true", "yes", "on"}
+    else:
+        await tg_reply(update, "Неизвестное поле")
+        return
 
-        bot.post_store.set(post)
-        await tg_reply(update, "Шаблон обновлен ✅")
-    except Exception as exc:
-        await tg_reply(update, f"Ошибка: {exc}")
+    bot.post_store.set(post)
+    await tg_reply(update, "Шаблон обновлен ✅")
 
 
 async def tg_bridge_to_discord(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -594,21 +617,50 @@ async def tg_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -
         await tg_reply(update, f"Ошибка обработки команды: {context.error}")
 
 
+def parse_post_from_json(data: dict) -> SavedPost:
+    post = SavedPost(
+        name=str(data["name"]).strip().lower(),
+        channel_id=parse_channel_id(str(data["channel_id"])),
+        title=str(data.get("title", "")),
+        description=str(data.get("description", "")),
+        color_hex=str(data.get("color_hex", "2ECC71")),
+        image_url=str(data.get("image_url", "")).strip() or None,
+        is_ticket_panel=bool(data.get("is_ticket_panel", False)),
+        order_label=str(data.get("order_label", "ORDER")),
+        order_emoji=str(data.get("order_emoji", "🧾")),
+        order_style=str(data.get("order_style", "success")),
+        support_label=str(data.get("support_label", "SUPPORT")),
+        support_emoji=str(data.get("support_emoji", "🛟")),
+        support_style=str(data.get("support_style", "primary")),
+        split_enabled=bool(data.get("split_enabled", False)),
+        split_title=str(data.get("split_title", "")),
+        split_description=str(data.get("split_description", "")),
+        split_color_hex=str(data.get("split_color_hex", "2ECC71")),
+        auto_order_message=str(data.get("auto_order_message", "")),
+        auto_support_message=str(data.get("auto_support_message", "")),
+        last_message_id=(
+            int(data["last_message_id"])
+            if data.get("last_message_id") not in {None, ""}
+            else None
+        ),
+    )
+    int(post.color_hex.strip("#"), 16)
+    int(post.split_color_hex.strip("#"), 16)
+    return post
+
+
 async def web_index(request: web.Request) -> web.Response:
-    html = EDITOR_HTML_PATH.read_text(encoding="utf-8")
-    return web.Response(text=html, content_type="text/html")
+    return web.Response(text=EDITOR_HTML_PATH.read_text(encoding="utf-8"), content_type="text/html")
 
 
 async def web_list_posts(request: web.Request) -> web.Response:
     bot: BridgeBot = request.app["bot"]
-    payload = [asdict(post) for post in bot.post_store.list_posts()]
-    return web.json_response(payload)
+    return web.json_response([asdict(post) for post in bot.post_store.list_posts()])
 
 
 async def web_get_post(request: web.Request) -> web.Response:
     bot: BridgeBot = request.app["bot"]
-    name = request.match_info["name"]
-    post = bot.post_store.get(name)
+    post = bot.post_store.get(request.match_info["name"])
     if not post:
         return web.json_response({"error": "not_found"}, status=404)
     return web.json_response(asdict(post))
@@ -616,25 +668,8 @@ async def web_get_post(request: web.Request) -> web.Response:
 
 async def web_save_post(request: web.Request) -> web.Response:
     bot: BridgeBot = request.app["bot"]
-    data = await request.json()
-
     try:
-        name = data["name"].strip().lower()
-        post = SavedPost(
-            name=name,
-            channel_id=parse_channel_id(str(data["channel_id"])),
-            title=str(data.get("title", "")).strip(),
-            description=str(data.get("description", "")).strip(),
-            color_hex=str(data.get("color_hex", "2ECC71")).strip(),
-            image_url=str(data.get("image_url", "")).strip() or None,
-            is_ticket_panel=bool(data.get("is_ticket_panel", False)),
-            last_message_id=(
-                int(data["last_message_id"])
-                if data.get("last_message_id") not in {None, ""}
-                else None
-            ),
-        )
-        int(post.color_hex.strip("#"), 16)
+        post = parse_post_from_json(await request.json())
         bot.post_store.set(post)
         return web.json_response({"ok": True, "post": asdict(post)})
     except Exception as exc:
@@ -647,23 +682,16 @@ async def web_publish_post(request: web.Request) -> web.Response:
     post = bot.post_store.get(name)
     if not post:
         return web.json_response({"error": "not_found"}, status=404)
-
     try:
         msg = await publish_saved_post(bot, post)
         post.last_message_id = msg.id
         bot.post_store.set(post)
-        return web.json_response(
-            {
-                "ok": True,
-                "channel_id": post.channel_id,
-                "message_id": post.last_message_id,
-            }
-        )
+        return web.json_response({"ok": True, "channel_id": post.channel_id, "message_id": msg.id})
     except Exception as exc:
         return web.json_response({"error": str(exc)}, status=400)
 
 
-async def start_web_server(bot: BridgeBot) -> tuple[web.AppRunner, web.BaseSite]:
+async def start_web_server(bot: BridgeBot) -> web.AppRunner:
     app = web.Application()
     app["bot"] = bot
     app.router.add_get("/", web_index)
@@ -671,37 +699,33 @@ async def start_web_server(bot: BridgeBot) -> tuple[web.AppRunner, web.BaseSite]
     app.router.add_get("/api/posts/{name}", web_get_post)
     app.router.add_post("/api/posts/save", web_save_post)
     app.router.add_post("/api/posts/{name}/publish", web_publish_post)
-
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, WEB_HOST, WEB_PORT)
-    await site.start()
+    await web.TCPSite(runner, WEB_HOST, WEB_PORT).start()
     logger.info("Web editor started on http://%s:%s", WEB_HOST, WEB_PORT)
-    return runner, site
+    return runner
 
 
 def validate_env() -> None:
-    if not DISCORD_TOKEN or not TELEGRAM_TOKEN or TELEGRAM_CHAT_ID is None:
-        raise RuntimeError("Set DISCORD_TOKEN, TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in .env")
+    if not DISCORD_TOKEN or not TELEGRAM_TOKEN:
+        raise RuntimeError("Set DISCORD_TOKEN and TELEGRAM_TOKEN in .env")
 
 
 async def run() -> None:
     validate_env()
     ticket_store = TicketStore(STATE_FILE)
     post_store = PostStore(POSTS_FILE)
-    d_bot = BridgeBot(ticket_store, post_store)
+    user_link_store = UserLinkStore(USER_LINKS_FILE)
+    d_bot = BridgeBot(ticket_store, post_store, user_link_store)
 
     tg_app = Application.builder().token(TELEGRAM_TOKEN).build()
     d_bot.tg_app = tg_app
     tg_app.bot_data["discord_bot"] = d_bot
 
     tg_app.add_handler(CommandHandler("start", tg_start))
-    tg_app.add_handler(CommandHandler("panel", tg_panel))
-    tg_app.add_handler(CommandHandler("post", tg_post))
+    tg_app.add_handler(CommandHandler("bind_discord", tg_bind_discord))
     tg_app.add_handler(CommandHandler("post_save", tg_post_save))
     tg_app.add_handler(CommandHandler("post_send", tg_post_send))
-    tg_app.add_handler(CommandHandler("post_show", tg_post_show))
-    tg_app.add_handler(CommandHandler("post_list", tg_post_list))
     tg_app.add_handler(CommandHandler("post_edit", tg_post_edit))
     tg_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), tg_bridge_to_discord))
     tg_app.add_error_handler(tg_error_handler)
@@ -709,23 +733,20 @@ async def run() -> None:
     await tg_app.bot.set_my_commands(
         [
             BotCommand("start", "Показать команды"),
-            BotCommand("panel", "Отправить тикет-панель"),
-            BotCommand("post", "Одноразовый пост в Discord"),
+            BotCommand("bind_discord", "Привязать Discord user к Telegram"),
             BotCommand("post_save", "Сохранить шаблон и отправить"),
             BotCommand("post_send", "Опубликовать сохраненный шаблон"),
             BotCommand("post_edit", "Редактировать сохраненный шаблон"),
-            BotCommand("post_show", "Показать шаблон"),
-            BotCommand("post_list", "Список шаблонов"),
         ]
     )
 
     await tg_app.initialize()
     await tg_app.start()
     await tg_app.updater.start_polling()
-    web_runner, _ = await start_web_server(d_bot)
+    web_runner = await start_web_server(d_bot)
 
     discord_task = asyncio.create_task(d_bot.start(DISCORD_TOKEN))
-    logger.info("Both bots started")
+    logger.info("Discord + Telegram + Web editor started")
 
     try:
         await discord_task

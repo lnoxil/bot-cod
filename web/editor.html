@@ -3,159 +3,202 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Discord Post Editor</title>
+  <title>Full Discord Editor</title>
   <style>
-    body { font-family: Inter, Arial, sans-serif; background:#0f1115; color:#fff; margin:0; }
-    .wrap { display:grid; grid-template-columns: 1fr 1fr; gap:20px; padding:20px; }
-    .card { background:#1a1d24; border-radius:12px; padding:16px; }
-    label { display:block; margin:10px 0 6px; font-size:13px; color:#c9d1d9; }
-    input, textarea, select { width:100%; padding:10px; border-radius:8px; border:1px solid #2d333b; background:#11151a; color:#fff; }
-    textarea { min-height:150px; resize:vertical; }
-    .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-    button { margin-top:12px; padding:10px 14px; border-radius:8px; border:none; background:#2ecc71; color:#08130d; font-weight:700; cursor:pointer; }
-    button.secondary { background:#5865f2; color:#fff; }
-    button.dark { background:#2d333b; color:#fff; }
+    body{font-family:Inter,Arial,sans-serif;background:#0f1115;color:#fff;margin:0}
+    .wrap{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;padding:18px}
+    .card{background:#161b24;border-radius:12px;padding:14px}
+    label{display:block;margin:8px 0 6px;color:#cdd9e5;font-size:13px}
+    input,textarea,select{width:100%;padding:10px;border:1px solid #2f3744;border-radius:8px;background:#0d121a;color:#fff}
+    textarea{min-height:120px}
+    .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+    .toolbar button,.actions button{border:none;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer}
+    .toolbar button{background:#2d3748;color:#fff}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .save{background:#2ecc71}.pub{background:#5865f2;color:#fff}.dark{background:#2d3748;color:#fff}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 
-    .preview { background:#2b2d31; border-left:4px solid #2ecc71; border-radius:8px; padding:12px; }
-    .preview h3 { margin:0 0 8px; }
-    .preview img { max-width:100%; border-radius:10px; margin-top:12px; }
-    .buttons { margin-top:10px; display:flex; gap:8px; }
-    .btn { background:#3a3f45; border-radius:8px; padding:8px 12px; font-weight:700; }
-    .btn.order { background:#2ecc71; color:#07130d; }
-    .btn.support { background:#5865f2; }
-    .status { margin-top:12px; color:#9ad0ff; white-space:pre-wrap; }
-    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+    .preview{background:#2b2d31;border-left:4px solid #2ecc71;border-radius:8px;padding:12px}
+    .preview2{margin-top:12px}
+    .title{font-weight:800;font-size:28px;margin:0 0 8px}
+    .desc{white-space:pre-wrap;line-height:1.4}
+    .img{max-width:100%;border-radius:10px;margin-top:12px}
+    .btns{display:flex;gap:8px;margin-top:10px}
+    .btn{border-radius:8px;padding:8px 12px;font-weight:700;color:#fff;background:#3a3f45}
+    .status{margin-top:10px;white-space:pre-wrap;color:#9ad0ff}
+    @media (max-width: 1000px){.wrap{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h2>Редактор поста</h2>
-      <label>Имя шаблона</label>
-      <input id="name" placeholder="zenbuilds_ticket" />
-
-      <div class="row">
-        <div>
-          <label>Channel ID</label>
-          <input id="channel_id" placeholder="123456789012345678" />
-        </div>
-        <div>
-          <label>Цвет (#hex)</label>
-          <input id="color_hex" value="2ECC71" />
-        </div>
-      </div>
-
-      <label>Заголовок</label>
-      <input id="title" value="ZENBUILDS TICKET CENTER" />
-
-      <label>Описание</label>
-      <textarea id="description">🎁: We work with projects of any complexity and are ready to create something amazing for you
-
-💬: Our staff will provide the most comfortable communication with an individual approach to the client
-
-📋: You can try yourself as a builder in our team, we will welcome high quality specialists</textarea>
-
-      <label>Image URL</label>
-      <input id="image_url" placeholder="https://example.com/banner.jpg" />
-
-      <label><input type="checkbox" id="is_ticket_panel" /> Это ticket panel (Order/Support кнопки)</label>
-
-      <button onclick="savePost()">Сохранить шаблон</button>
-      <button class="secondary" onclick="publishPost()">Опубликовать в Discord</button>
-      <button class="dark" onclick="loadPost()">Загрузить шаблон</button>
-      <button class="dark" onclick="listPosts()">Список шаблонов</button>
-
-      <div class="status" id="status"></div>
+<div class="wrap">
+  <div class="card">
+    <h2>Полный редактор поста</h2>
+    <label>Имя шаблона</label><input id="name" value="ticket">
+    <div class="row">
+      <div><label>Channel ID</label><input id="channel_id" placeholder="123..."></div>
+      <div><label>Цвет</label><input id="color_hex" value="2ECC71"></div>
     </div>
 
-    <div class="card">
-      <h2>Live preview</h2>
-      <div class="preview" id="preview" style="border-left-color:#2ecc71">
-        <h3 id="p_title">ZENBUILDS TICKET CENTER</h3>
-        <div id="p_desc"></div>
-        <img id="p_img" style="display:none" />
+    <label>Заголовок</label><input id="title" value="CapybarBuild">
+
+    <label>Описание</label>
+    <div class="toolbar">
+      <button onclick="wrapText('description','**','**')"><b>B</b></button>
+      <button onclick="wrapText('description','*','*')"><i>I</i></button>
+      <button onclick="wrapText('description','__','__')"><u>U</u></button>
+      <button onclick="wrapText('description','~~','~~')">S</button>
+      <button onclick="wrapText('description','```\n','\n```')">Code</button>
+      <button onclick="wrapText('description','> ','')">Quote</button>
+      <button onclick="insertEmoji('description','🎁')">🎁</button>
+      <button onclick="insertEmoji('description','💬')">💬</button>
+      <button onclick="insertEmoji('description','📋')">📋</button>
+    </div>
+    <textarea id="description">🎁 : We work with projects of any complexity and are ready to create something amazing for you
+
+💬 : Our staff will provide the most comfortable communication with an individual approach to the client</textarea>
+
+    <label>Image URL</label><input id="image_url" placeholder="https://...">
+
+    <div class="row">
+      <div><label>Кнопка Order label</label><input id="order_label" value="ORDER"></div>
+      <div><label>Кнопка Order emoji</label><input id="order_emoji" value="🧾"></div>
+    </div>
+    <div class="row">
+      <div><label>Кнопка Order color</label>
+        <select id="order_style"><option>success</option><option>primary</option><option>secondary</option><option>danger</option></select>
       </div>
-      <div class="buttons" id="p_buttons" style="display:none">
-        <div class="btn order">🧾 ORDER</div>
-        <div class="btn support">🛟 SUPPORT</div>
+      <div><label>Кнопка Support color</label>
+        <select id="support_style"><option>primary</option><option>success</option><option>secondary</option><option>danger</option></select>
       </div>
     </div>
+    <div class="row">
+      <div><label>Кнопка Support label</label><input id="support_label" value="SUPPORT"></div>
+      <div><label>Кнопка Support emoji</label><input id="support_emoji" value="🛟"></div>
+    </div>
+
+    <label><input type="checkbox" id="is_ticket_panel" checked> Это ticket panel (кнопки)</label>
+
+    <label><input type="checkbox" id="split_enabled"> Разделить пост на 2 части</label>
+    <label>Заголовок 2 части</label><input id="split_title" placeholder="Продолжение">
+    <label>Текст 2 части</label><textarea id="split_description"></textarea>
+    <label>Цвет 2 части</label><input id="split_color_hex" value="2ECC71">
+
+    <label>Авто-текст в ORDER тикете</label><textarea id="auto_order_message">Спасибо за заказ! Опишите задачу и бюджет.</textarea>
+    <label>Авто-текст в SUPPORT тикете</label><textarea id="auto_support_message">Спасибо за обращение в саппорт! Опишите проблему подробно.</textarea>
+
+    <div class="actions">
+      <button class="save" onclick="savePost()">Сохранить</button>
+      <button class="pub" onclick="publishPost()">Опубликовать в Discord</button>
+      <button class="dark" onclick="loadPost()">Загрузить</button>
+      <button class="dark" onclick="listPosts()">Список</button>
+    </div>
+    <div class="status" id="status"></div>
   </div>
 
+  <div class="card">
+    <h2>Live preview</h2>
+    <div class="preview" id="preview">
+      <div class="title" id="p_title"></div>
+      <div class="desc" id="p_desc"></div>
+      <img id="p_img" class="img" style="display:none"/>
+    </div>
+    <div class="btns" id="btns" style="display:none">
+      <div class="btn" id="p_order_btn">🧾 ORDER</div>
+      <div class="btn" id="p_support_btn">🛟 SUPPORT</div>
+    </div>
+    <div class="preview preview2" id="preview2" style="display:none">
+      <div class="title" id="p2_title"></div>
+      <div class="desc" id="p2_desc"></div>
+    </div>
+  </div>
+</div>
+
 <script>
-  const ids = ["name","channel_id","title","description","color_hex","image_url","is_ticket_panel"];
-  ids.forEach(id => document.getElementById(id).addEventListener('input', updatePreview));
-  updatePreview();
+const FIELDS=["name","channel_id","title","description","color_hex","image_url","is_ticket_panel","order_label","order_emoji","order_style","support_label","support_emoji","support_style","split_enabled","split_title","split_description","split_color_hex","auto_order_message","auto_support_message"];
+FIELDS.forEach(id=>{const el=document.getElementById(id); el.addEventListener('input', updatePreview); el.addEventListener('change', updatePreview);});
 
-  function value(id){ return document.getElementById(id).value; }
-  function checked(id){ return document.getElementById(id).checked; }
-
-  function payload(){
-    return {
-      name: value('name').trim().toLowerCase(),
-      channel_id: value('channel_id').trim(),
-      title: value('title'),
-      description: value('description'),
-      color_hex: value('color_hex').replace('#',''),
-      image_url: value('image_url').trim(),
-      is_ticket_panel: checked('is_ticket_panel')
-    }
+function val(id){return document.getElementById(id).value}
+function chk(id){return document.getElementById(id).checked}
+function getPayload(){
+  return {
+    name: val('name').trim().toLowerCase(), channel_id: val('channel_id').trim(),
+    title: val('title'), description: val('description'), color_hex: val('color_hex').replace('#',''), image_url: val('image_url').trim(),
+    is_ticket_panel: chk('is_ticket_panel'),
+    order_label: val('order_label'), order_emoji: val('order_emoji'), order_style: val('order_style'),
+    support_label: val('support_label'), support_emoji: val('support_emoji'), support_style: val('support_style'),
+    split_enabled: chk('split_enabled'), split_title: val('split_title'), split_description: val('split_description'), split_color_hex: val('split_color_hex').replace('#',''),
+    auto_order_message: val('auto_order_message'), auto_support_message: val('auto_support_message')
   }
+}
 
-  function updatePreview(){
-    const p = payload();
-    document.getElementById('p_title').textContent = p.title || '(без заголовка)';
-    document.getElementById('p_desc').innerText = p.description || '(без описания)';
-    document.getElementById('preview').style.borderLeftColor = '#' + (p.color_hex || '2ecc71');
+function applyMarkdownPreview(text){
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(.*?)\*/g, '<i>$1</i>')
+    .replace(/__(.*?)__/g, '<u>$1</u>')
+    .replace(/~~(.*?)~~/g, '<s>$1</s>')
+    .replace(/\n/g,'<br>');
+}
 
-    const img = document.getElementById('p_img');
-    if(p.image_url){ img.src = p.image_url; img.style.display='block'; }
-    else { img.style.display='none'; }
+function btnColor(style){
+  if(style==='success')return '#2ecc71'; if(style==='primary')return '#5865f2'; if(style==='danger')return '#ed4245'; return '#4f545c';
+}
 
-    document.getElementById('p_buttons').style.display = p.is_ticket_panel ? 'flex' : 'none';
-  }
+function updatePreview(){
+  const p=getPayload();
+  document.getElementById('p_title').textContent=p.title||'(без заголовка)';
+  document.getElementById('p_desc').innerHTML=applyMarkdownPreview(p.description||'(без текста)');
+  document.getElementById('preview').style.borderLeftColor='#'+(p.color_hex||'2ECC71');
+  const img=document.getElementById('p_img');
+  if(p.image_url){img.src=p.image_url; img.style.display='block'} else img.style.display='none';
 
-  async function savePost(){
-    const p = payload();
-    if(!p.name || !p.channel_id){ return setStatus('Нужны name и channel_id'); }
-    const res = await fetch('/api/posts/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p)});
-    const data = await res.json();
-    setStatus(JSON.stringify(data, null, 2));
-  }
+  const btns=document.getElementById('btns');
+  btns.style.display=p.is_ticket_panel?'flex':'none';
+  const ob=document.getElementById('p_order_btn');
+  const sb=document.getElementById('p_support_btn');
+  ob.textContent=`${p.order_emoji} ${p.order_label}`;
+  sb.textContent=`${p.support_emoji} ${p.support_label}`;
+  ob.style.background=btnColor(p.order_style); sb.style.background=btnColor(p.support_style);
 
-  async function publishPost(){
-    const p = payload();
-    if(!p.name){ return setStatus('Сначала укажи name и сохрани'); }
-    await savePost();
-    const res = await fetch(`/api/posts/${encodeURIComponent(p.name)}/publish`, {method:'POST'});
-    const data = await res.json();
-    setStatus(JSON.stringify(data, null, 2));
-  }
+  const p2=document.getElementById('preview2');
+  if(p.split_enabled){
+    p2.style.display='block'; p2.style.borderLeftColor='#'+(p.split_color_hex||'2ECC71');
+    document.getElementById('p2_title').textContent=p.split_title||'Продолжение';
+    document.getElementById('p2_desc').innerHTML=applyMarkdownPreview(p.split_description||'');
+  } else p2.style.display='none';
+}
 
-  async function loadPost(){
-    const name = value('name').trim().toLowerCase();
-    if(!name){ return setStatus('Укажи name'); }
-    const res = await fetch(`/api/posts/${encodeURIComponent(name)}`);
-    const data = await res.json();
-    if(data.error){ return setStatus(JSON.stringify(data, null, 2)); }
+function wrapText(id, left, right){
+  const t=document.getElementById(id); const s=t.selectionStart; const e=t.selectionEnd;
+  const before=t.value.slice(0,s), sel=t.value.slice(s,e), after=t.value.slice(e);
+  t.value=before+left+sel+right+after; t.focus(); t.selectionStart=s+left.length; t.selectionEnd=e+left.length; updatePreview();
+}
+function insertEmoji(id, emoji){
+  const t=document.getElementById(id); const s=t.selectionStart;
+  t.value=t.value.slice(0,s)+emoji+t.value.slice(s); t.focus(); t.selectionStart=t.selectionEnd=s+emoji.length; updatePreview();
+}
 
-    document.getElementById('channel_id').value = data.channel_id ?? '';
-    document.getElementById('title').value = data.title ?? '';
-    document.getElementById('description').value = data.description ?? '';
-    document.getElementById('color_hex').value = data.color_hex ?? '2ECC71';
-    document.getElementById('image_url').value = data.image_url ?? '';
-    document.getElementById('is_ticket_panel').checked = !!data.is_ticket_panel;
-    updatePreview();
-    setStatus('Загружено: ' + name);
-  }
-
-  async function listPosts(){
-    const res = await fetch('/api/posts');
-    const data = await res.json();
-    setStatus(JSON.stringify(data, null, 2));
-  }
-
-  function setStatus(txt){ document.getElementById('status').textContent = txt; }
+async function savePost(){
+  const p=getPayload(); if(!p.name||!p.channel_id) return setStatus('Нужны name и channel_id');
+  const res=await fetch('/api/posts/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  setStatus(JSON.stringify(await res.json(),null,2));
+}
+async function publishPost(){
+  const p=getPayload(); if(!p.name) return setStatus('Сначала name');
+  await savePost();
+  const res=await fetch(`/api/posts/${encodeURIComponent(p.name)}/publish`,{method:'POST'});
+  setStatus(JSON.stringify(await res.json(),null,2));
+}
+async function loadPost(){
+  const name=val('name').trim().toLowerCase(); if(!name) return setStatus('Укажи name');
+  const res=await fetch(`/api/posts/${encodeURIComponent(name)}`); const d=await res.json();
+  if(d.error) return setStatus(JSON.stringify(d,null,2));
+  FIELDS.forEach(k=>{if(k==='name')return; const el=document.getElementById(k); if(!el)return; if(el.type==='checkbox')el.checked=!!d[k]; else el.value=d[k]??''});
+  updatePreview(); setStatus('Загружено');
+}
+async function listPosts(){ const res=await fetch('/api/posts'); setStatus(JSON.stringify(await res.json(),null,2)); }
+function setStatus(t){document.getElementById('status').textContent=t}
+updatePreview();
 </script>
 </body>
 </html>
