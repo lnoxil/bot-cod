@@ -471,6 +471,7 @@ def parse_button_tags(text: str, *, default_row: int = 0) -> tuple[str, list[Pan
 def materialize_post_for_send(post: SavedPost) -> SavedPost:
     cleaned_desc, tag_buttons = parse_button_tags(post.description, default_row=0)
     merged_buttons = list(post.panel_buttons) + tag_buttons
+    merged_buttons = stack_buttons_for_window_layout(post, merged_buttons)
     return replace(post, description=cleaned_desc, panel_buttons=merged_buttons)
 
 
@@ -874,17 +875,38 @@ def hex_midpoint(a: str, b: str) -> str:
     return f"{(ar+br)//2:02X}{(ag+bg)//2:02X}{(ab+bb)//2:02X}"
 
 
+def is_window_layout(post: SavedPost) -> bool:
+    return str(post.layout_mode).strip().lower() == "window"
+
+
+def stack_buttons_for_window_layout(post: SavedPost, buttons: list[PanelButton]) -> list[PanelButton]:
+    if not is_window_layout(post) or not buttons:
+        return buttons
+
+    # If rows are not explicitly configured (all in row 0), spread buttons one-per-row
+    # so visual layout is closer to sectioned panel references.
+    if any(int(getattr(b, "row", 0) or 0) != 0 for b in buttons):
+        return buttons
+
+    out: list[PanelButton] = []
+    for i, b in enumerate(buttons):
+        out.append(replace(b, row=max(0, min(4, i))))
+    return out
+
+
 def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
-    is_window_mode = str(post.layout_mode).strip().lower() == "window"
+    is_window_mode = is_window_layout(post)
     base_color_hex = post.color_hex
     if post.auto_gradient:
         base_color_hex = hex_midpoint(post.gradient_start_hex, post.gradient_end_hex)
+
     main_kwargs: dict[str, object] = {
         "title": post.title,
         "description": post.description,
     }
     if not is_window_mode:
         main_kwargs["color"] = int(base_color_hex.strip("#"), 16)
+
     main = discord.Embed(**main_kwargs)
     if post.image_url and post.image_position == "top":
         main.description = f"[image above]\n{main.description}"
@@ -892,14 +914,22 @@ def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
     elif post.image_url:
         main.set_image(url=post.image_url)
 
+    if is_window_mode:
+        for b in post.extra_blocks:
+            main.add_field(
+                name=b.title or "—",
+                value=b.description or " ",
+                inline=False,
+            )
+        return [main]
+
     result = [main]
     for b in post.extra_blocks:
         block_kwargs: dict[str, object] = {
             "title": b.title,
             "description": b.description,
         }
-        if not is_window_mode:
-            block_kwargs["color"] = int(b.color_hex.strip("#"), 16)
+        block_kwargs["color"] = int(b.color_hex.strip("#"), 16)
         eb = discord.Embed(**block_kwargs)
         if b.image_url:
             if b.image_position == "top":
@@ -907,6 +937,7 @@ def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
             eb.set_image(url=b.image_url)
         result.append(eb)
     return result
+
 
 
 async def publish_post(bot: BridgeBot, post: SavedPost) -> discord.Message:

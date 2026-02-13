@@ -35,6 +35,7 @@
   - см. Discord Developer Docs: Message Components / Action Rows (https://discord.com/developers/docs/components/overview).
 
 - добавлен режим layout для embed: **sidebar** (текущий вид с цветной полосой слева) и **window** (вид "окна" без боковой цветной полосы).
+- режим `window` теперь собирает `extra_blocks` как `embed fields` (`inline=False`) в одном embed, чтобы структура была как в референсе: заголовок/описание + секции ниже в одном сообщении.
 - в Telegram формируется единое сообщение-дайджест по тикету (последние 5 сообщений клиента), которое редактируется при изменении/удалении сообщений в Discord.
 
 ## .env
