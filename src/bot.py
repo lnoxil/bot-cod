@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import zipfile
 from datetime import datetime, timezone
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
@@ -516,6 +517,7 @@ class BridgeBot(commands.Bot):
         attach_dir.mkdir(parents=True, exist_ok=True)
 
         lines: list[str] = []
+        json_messages: list[dict] = []
         files: list[Path] = []
         downloaded: list[Path] = []
 
@@ -524,6 +526,33 @@ class BridgeBot(commands.Bot):
                 t = m.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 msg_line = f"[{t}] {m.author.display_name} ({m.author.id}): {m.content or ''}".rstrip()
                 lines.append(msg_line)
+
+                embeds_payload = []
+                for emb in m.embeds:
+                    try:
+                        embeds_payload.append(emb.to_dict())
+                    except Exception:
+                        embeds_payload.append({"error": "embed_to_dict_failed"})
+
+                json_messages.append({
+                    "id": m.id,
+                    "created_at": t,
+                    "author": {
+                        "id": m.author.id,
+                        "display_name": m.author.display_name,
+                    },
+                    "content": m.content or "",
+                    "attachments": [
+                        {
+                            "filename": a.filename,
+                            "url": a.url,
+                            "content_type": a.content_type,
+                            "size": a.size,
+                        }
+                        for a in m.attachments
+                    ],
+                    "embeds": embeds_payload,
+                })
 
                 for a in m.attachments:
                     fname = sanitize_filename(a.filename)
@@ -544,6 +573,10 @@ class BridgeBot(commands.Bot):
         txt_path.write_text("\n".join(lines), encoding="utf-8")
         files.append(txt_path)
 
+        json_path = ticket_dir / "dialog.json"
+        json_path.write_text(json.dumps(json_messages, ensure_ascii=False, indent=2), encoding="utf-8")
+        files.append(json_path)
+
         try:
             from docx import Document
 
@@ -558,6 +591,12 @@ class BridgeBot(commands.Bot):
             logger.exception("DOCX export failed")
 
         files.extend(downloaded)
+
+        zip_path = ticket_dir / "ticket_archive.zip"
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for fp in files:
+                zf.write(fp, arcname=fp.relative_to(ticket_dir))
+        files.append(zip_path)
         return files
 
     async def _send_ticket_rating(self, chat_id: int, ticket_type: str, channel_name: str, channel_id: int) -> None:
