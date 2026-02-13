@@ -392,7 +392,27 @@ function updatePreview(){
   document.getElementById('p_support_ticket').innerHTML = markdownPreview((p.auto_support_message||'').replaceAll('{user}','@Noxi'));
 
   const root=document.getElementById('previewBlocks'); root.innerHTML='';
-  if((p.layout_mode==='window' || p.layout_mode==='container') && p.extra_blocks.length){
+  if(p.layout_mode==='container' && p.extra_blocks.length){
+    const outer=document.createElement('div');
+    outer.className='preview';
+    outer.style.marginTop='10px';
+    outer.style.border='1px solid #2f3744';
+    outer.style.borderLeft='none';
+    p.extra_blocks.forEach((b,i)=>{
+      const row=document.createElement('div');
+      row.className='block';
+      row.style.background='transparent';
+      row.style.marginTop = i===0 ? '0' : '8px';
+      row.style.border='none';
+      const btn=runtimeButtons[i];
+      row.innerHTML=`<div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">`
+        +`<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:26px;margin-bottom:4px">${escapeHtml(b.title||'Section')}</div><div class='desc'>${markdownPreview(b.description||'')}</div></div>`
+        +`${btn?`<div class='btn-chip' style='white-space:nowrap;background:${btn.action==='url' ? '#4f545c' : styleColor(btn.style||'secondary')}' >${escapeHtml((btn.emoji?btn.emoji+' ':'')+(btn.label||'Button'))}</div>`:''}`
+        +`</div>`;
+      outer.appendChild(row);
+    });
+    root.appendChild(outer);
+  } else if(p.layout_mode==='window' && p.extra_blocks.length){
     p.extra_blocks.forEach((b,i)=>{
       const row=document.createElement('div');
       row.className='block';

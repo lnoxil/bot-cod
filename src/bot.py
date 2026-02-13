@@ -915,6 +915,54 @@ def stack_buttons_for_window_layout(post: SavedPost, buttons: list[PanelButton])
     return out
 
 
+def split_embed_text_chunks(text: str, *, limit: int = 3900) -> list[str]:
+    src = (text or "").strip()
+    if not src:
+        return [" "]
+    if len(src) <= limit:
+        return [src]
+
+    parts: list[str] = []
+    rest = src
+    while len(rest) > limit:
+        cut = rest.rfind("\n\n", 0, limit)
+        if cut < int(limit * 0.5):
+            cut = rest.rfind("\n", 0, limit)
+        if cut < int(limit * 0.5):
+            cut = limit
+        parts.append(rest[:cut].rstrip())
+        rest = rest[cut:].lstrip()
+    if rest:
+        parts.append(rest)
+    return parts
+
+
+def build_container_embeds(post: SavedPost) -> list[discord.Embed]:
+    sections: list[str] = []
+    if post.description.strip():
+        sections.append(post.description.strip())
+    for b in post.extra_blocks:
+        sec_title = f"### {b.title.strip()}" if b.title.strip() else ""
+        sec_desc = (b.description or "").strip()
+        sec = "\n".join(x for x in [sec_title, sec_desc] if x).strip()
+        if sec:
+            sections.append(sec)
+
+    merged = "\n\n".join(sections).strip()
+    chunks = split_embed_text_chunks(merged, limit=3900)
+
+    embeds: list[discord.Embed] = []
+    for i, chunk in enumerate(chunks):
+        emb = discord.Embed(
+            title=post.title if i == 0 else "",
+            description=chunk or " ",
+        )
+        if i == 0 and post.image_url:
+            emb.set_image(url=post.image_url)
+        embeds.append(emb)
+    return embeds
+
+
 def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
     is_window_mode = is_window_layout(post)
     is_container_mode = is_container_layout(post)
@@ -946,18 +994,7 @@ def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
         return [main]
 
     if is_container_mode:
-        result = [main]
-        for b in post.extra_blocks:
-            eb = discord.Embed(
-                title=b.title,
-                description=b.description,
-            )
-            if b.image_url:
-                if b.image_position == "top":
-                    eb.description = f"[image above]\n{eb.description}"
-                eb.set_image(url=b.image_url)
-            result.append(eb)
-        return result
+        return build_container_embeds(post)
 
     result = [main]
     for b in post.extra_blocks:
