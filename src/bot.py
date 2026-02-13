@@ -268,19 +268,41 @@ class TicketOpenView(discord.ui.View):
         self.bot = bot
         self.post = post
 
-    @discord.ui.button(label="placeholder", style=ButtonStyle.secondary, custom_id="dyn_order")
-    async def order(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        button.label = self.post.order_label
-        button.emoji = self.post.order_emoji
-        button.style = style_from_name(self.post.order_style)
-        await self.bot.create_ticket(interaction, "order", self.post)
+        order_btn = discord.ui.Button(
+            label=post.order_label,
+            emoji=post.order_emoji,
+            style=style_from_name(post.order_style),
+            custom_id=f"order:{post.name}",
+        )
+        support_btn = discord.ui.Button(
+            label=post.support_label,
+            emoji=post.support_emoji,
+            style=style_from_name(post.support_style),
+            custom_id=f"support:{post.name}",
+        )
 
-    @discord.ui.button(label="placeholder2", style=ButtonStyle.secondary, custom_id="dyn_support")
-    async def support(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        button.label = self.post.support_label
-        button.emoji = self.post.support_emoji
-        button.style = style_from_name(self.post.support_style)
-        await self.bot.create_ticket(interaction, "support", self.post)
+        async def order_cb(interaction: discord.Interaction) -> None:
+            await self._safe_create(interaction, "order")
+
+        async def support_cb(interaction: discord.Interaction) -> None:
+            await self._safe_create(interaction, "support")
+
+        order_btn.callback = order_cb
+        support_btn.callback = support_cb
+        self.add_item(order_btn)
+        self.add_item(support_btn)
+
+    async def _safe_create(self, interaction: discord.Interaction, ticket_type: str) -> None:
+        try:
+            await self.bot.create_ticket(interaction, ticket_type, self.post)
+        except Exception as exc:
+            logger.exception("Ticket button failed")
+            if interaction.response.is_done():
+                await interaction.followup.send(f"Ошибка открытия тикета: {exc}", ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    f"Ошибка открытия тикета: {exc}", ephemeral=True
+                )
 
 
 class BridgeBot(commands.Bot):
@@ -429,12 +451,6 @@ async def publish_post(bot: BridgeBot, post: SavedPost) -> discord.Message:
     embeds = embeds_from_post(post)
     if post.is_ticket_panel:
         view = TicketOpenView(bot, post)
-        view.children[0].label = post.order_label
-        view.children[0].emoji = post.order_emoji
-        view.children[0].style = style_from_name(post.order_style)
-        view.children[1].label = post.support_label
-        view.children[1].emoji = post.support_emoji
-        view.children[1].style = style_from_name(post.support_style)
         return await channel.send(embeds=embeds, view=view)
     return await channel.send(embeds=embeds)
 
@@ -718,4 +734,8 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    try:
+        asyncio.run(run())
+    except Exception:
+        logger.exception("Fatal startup/runtime error")
+        raise
