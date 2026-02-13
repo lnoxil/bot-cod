@@ -26,6 +26,13 @@
     .blocks{margin-top:12px;border-top:1px solid #2f3744;padding-top:10px}
     .block{border:1px solid #2f3744;border-radius:10px;padding:8px;margin-bottom:8px}
     .status{margin-top:10px;color:#9ad0ff;white-space:pre-wrap}
+    .tabs{display:flex;gap:8px;margin-bottom:10px}
+    .tab{background:#2f3744;color:#fff}
+    .tab.active{background:#5865f2}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .ticket-preview{margin-top:12px;padding:10px;background:#222834;border-radius:8px;border:1px solid #2f3744}
+    .ticket-preview h4{margin:0 0 8px}
     @media (max-width: 1000px){.wrap{grid-template-columns:1fr}}
   </style>
 </head>
@@ -33,60 +40,85 @@
 <div class="wrap">
   <div class="card">
     <h2>Редактор постов</h2>
-    <label>Имя шаблона</label><input id="name" value="ticket">
-    <div class="row">
-      <div><label>Выбрать сохраненный</label><select id="template_select"><option value="">--</option></select></div>
-      <div style="display:flex;align-items:flex-end"><button class="dark" onclick="loadSelectedTemplate()">Загрузить выбранный</button></div>
-    </div>
-    <div class="row">
-      <div><label>Channel ID</label><input id="channel_id" placeholder="123..."></div>
-      <div><label>Цвет линии</label><input id="color_hex" value="2ECC71"></div>
-    </div>
-    <label>Заголовок</label><input id="title" value="CapybarBuild">
 
-    <label>Описание</label>
-    <div class="toolbar">
-      <button onclick="wrapText('description','**','**')">B</button>
-      <button onclick="wrapText('description','*','*')">I</button>
-      <button onclick="wrapText('description','__','__')">U</button>
-      <button onclick="wrapText('description','~~','~~')">S</button>
-      <button onclick="wrapText('description','```\n','\n```')">Code</button>
-      <button onclick="wrapText('description','> ','')">Quote</button>
-    </div>
-    <textarea id="description">🎁: We work with projects of any complexity and are ready to create something amazing for you</textarea>
-
-    <div class="row">
-      <div><label>Image URL</label><input id="image_url" placeholder="https://..."></div>
-      <div><label>Позиция image</label><select id="image_position"><option value="bottom">bottom</option><option value="top">top</option></select></div>
+    <div class="tabs">
+      <button class="tab active" data-tab="post" onclick="switchTab('post')">Пост</button>
+      <button class="tab" data-tab="ticket" onclick="switchTab('ticket')">ORDER/SUPPORT ticket</button>
     </div>
 
-    <label><input type="checkbox" id="auto_gradient"> Авто-градиент</label>
-    <div class="row">
-      <div><label>Gradient start</label><input id="gradient_start_hex" value="2ECC71"></div>
-      <div><label>Gradient end</label><input id="gradient_end_hex" value="5865F2"></div>
+    <div class="tab-panel active" id="panel-post">
+      <label>Имя шаблона</label><input id="name" value="ticket">
+      <div class="row">
+        <div><label>Выбрать сохраненный</label><select id="template_select"><option value="">--</option></select></div>
+        <div style="display:flex;align-items:flex-end"><button class="dark" onclick="loadSelectedTemplate()">Загрузить выбранный</button></div>
+      </div>
+
+      <div class="row">
+        <div><label>Channel ID</label><input id="channel_id" placeholder="123..."></div>
+        <div><label>Цвет линии</label><input id="color_hex" value="2ECC71"></div>
+      </div>
+      <label>Заголовок</label><input id="title" value="CapybarBuild">
+
+      <label>Описание</label>
+      <div class="toolbar">
+        <button onclick="wrapText('description','**','**')">B</button>
+        <button onclick="wrapText('description','*','*')">I</button>
+        <button onclick="wrapText('description','__','__')">U</button>
+        <button onclick="wrapText('description','~~','~~')">S</button>
+        <button onclick="wrapText('description','```\n','\n```')">Code</button>
+        <button onclick="wrapText('description','> ','')">Quote</button>
+        <button onclick="insertLink('description')">Link</button>
+      </div>
+      <textarea id="description">🎁: We work with projects of any complexity and are ready to create something amazing for you</textarea>
+
+      <div class="row">
+        <div><label>Image URL</label><input id="image_url" placeholder="https://..."></div>
+        <div><label>Позиция image</label><select id="image_position"><option value="bottom">bottom</option><option value="top">top</option></select></div>
+      </div>
+
+      <label><input type="checkbox" id="auto_gradient"> Авто-градиент</label>
+      <div class="row">
+        <div><label>Gradient start</label><input id="gradient_start_hex" value="2ECC71"></div>
+        <div><label>Gradient end</label><input id="gradient_end_hex" value="5865F2"></div>
+      </div>
+
+      <label><input type="checkbox" id="is_ticket_panel" checked> ticket panel</label>
+      <div class="row">
+        <div><label>ORDER text</label><input id="order_label" value="ORDER"></div>
+        <div><label>ORDER emoji</label><input id="order_emoji" value="🧾" placeholder="можно оставить пустым"></div>
+      </div>
+      <div class="row">
+        <div><label>ORDER color</label><select id="order_style"><option>success</option><option>primary</option><option>secondary</option><option>danger</option></select></div>
+        <div><label>SUPPORT color</label><select id="support_style"><option>primary</option><option>success</option><option>secondary</option><option>danger</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>SUPPORT text</label><input id="support_label" value="SUPPORT"></div>
+        <div><label>SUPPORT emoji</label><input id="support_emoji" value="🛟" placeholder="можно оставить пустым"></div>
+      </div>
+
+      <div class="blocks">
+        <h3>Дополнительные блоки (+)</h3>
+        <div id="extraBlocks"></div>
+        <button class="dark" onclick="addBlock()">+ Добавить блок</button>
+      </div>
     </div>
 
-    <label><input type="checkbox" id="is_ticket_panel" checked> ticket panel</label>
-    <div class="row">
-      <div><label>ORDER text</label><input id="order_label" value="ORDER"></div>
-      <div><label>ORDER emoji</label><input id="order_emoji" value="🧾"></div>
-    </div>
-    <div class="row">
-      <div><label>ORDER color</label><select id="order_style"><option>success</option><option>primary</option><option>secondary</option><option>danger</option></select></div>
-      <div><label>SUPPORT color</label><select id="support_style"><option>primary</option><option>success</option><option>secondary</option><option>danger</option></select></div>
-    </div>
-    <div class="row">
-      <div><label>SUPPORT text</label><input id="support_label" value="SUPPORT"></div>
-      <div><label>SUPPORT emoji</label><input id="support_emoji" value="🛟"></div>
-    </div>
+    <div class="tab-panel" id="panel-ticket">
+      <label>ORDER ticket сообщение (используй {user} для упоминания)</label>
+      <div class="toolbar">
+        <button onclick="wrapText('auto_order_message','**','**')">B</button>
+        <button onclick="wrapText('auto_order_message','*','*')">I</button>
+        <button onclick="insertLink('auto_order_message')">Link</button>
+      </div>
+      <textarea id="auto_order_message">Привет, {user}! Спасибо за заказ! Опишите задачу и бюджет.</textarea>
 
-    <label>Авто сообщение ORDER</label><textarea id="auto_order_message">Спасибо за заказ! Опишите задачу и бюджет.</textarea>
-    <label>Авто сообщение SUPPORT</label><textarea id="auto_support_message">Спасибо за обращение в саппорт! Опишите проблему подробно.</textarea>
-
-    <div class="blocks">
-      <h3>Дополнительные блоки (+)</h3>
-      <div id="extraBlocks"></div>
-      <button class="dark" onclick="addBlock()">+ Добавить блок</button>
+      <label>SUPPORT ticket сообщение (используй {user} для упоминания)</label>
+      <div class="toolbar">
+        <button onclick="wrapText('auto_support_message','**','**')">B</button>
+        <button onclick="wrapText('auto_support_message','*','*')">I</button>
+        <button onclick="insertLink('auto_support_message')">Link</button>
+      </div>
+      <textarea id="auto_support_message">Привет, {user}! Спасибо за обращение в саппорт! Опишите проблему подробно.</textarea>
     </div>
 
     <div class="act">
@@ -111,6 +143,13 @@
       <div id="p_support" class="btn">🛟 SUPPORT</div>
     </div>
     <div id="previewBlocks"></div>
+
+    <div class="ticket-preview">
+      <h4>ORDER ticket preview</h4>
+      <div id="p_order_ticket"></div>
+      <h4>SUPPORT ticket preview</h4>
+      <div id="p_support_ticket"></div>
+    </div>
   </div>
 </div>
 
@@ -120,23 +159,36 @@ fields.forEach(id=>{const el=document.getElementById(id); el.addEventListener('i
 
 let extraBlocks=[];
 
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.getElementById('panel-post').classList.toggle('active', name==='post');
+  document.getElementById('panel-ticket').classList.toggle('active', name==='ticket');
+}
+
 function val(id){return document.getElementById(id).value}
 function chk(id){return document.getElementById(id).checked}
 
 function styleColor(style){if(style==='success')return '#2ecc71'; if(style==='primary')return '#5865f2'; if(style==='danger')return '#ed4245'; return '#4f545c';}
-function markdownPreview(x){return (x||'').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\*(.*?)\*/g,'<i>$1</i>').replace(/__(.*?)__/g,'<u>$1</u>').replace(/~~(.*?)~~/g,'<s>$1</s>').replace(/\n/g,'<br>')}
+function markdownPreview(x){
+  return (x||'')
+    .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')
+    .replace(/\*(.*?)\*/g,'<i>$1</i>')
+    .replace(/__(.*?)__/g,'<u>$1</u>')
+    .replace(/~~(.*?)~~/g,'<s>$1</s>')
+    .replace(/\n/g,'<br>')
+}
 
 function payload(){
   return {
     name: val('name').trim().toLowerCase(), channel_id: val('channel_id').trim(), title: val('title'), description: val('description'),
     color_hex: val('color_hex').replace('#',''), image_url: val('image_url').trim(), image_position: val('image_position'),
     auto_gradient: chk('auto_gradient'), gradient_start_hex: val('gradient_start_hex').replace('#',''), gradient_end_hex: val('gradient_end_hex').replace('#',''),
-    is_ticket_panel: chk('is_ticket_panel'), order_label: val('order_label'), order_emoji: val('order_emoji'), order_style: val('order_style'),
-    support_label: val('support_label'), support_emoji: val('support_emoji'), support_style: val('support_style'),
+    is_ticket_panel: chk('is_ticket_panel'), order_label: val('order_label'), order_emoji: val('order_emoji').trim(), order_style: val('order_style'),
+    support_label: val('support_label'), support_emoji: val('support_emoji').trim(), support_style: val('support_style'),
     auto_order_message: val('auto_order_message'), auto_support_message: val('auto_support_message'), extra_blocks: extraBlocks
   };
 }
-
 
 async function refreshTemplateSelect(){
   const sel=document.getElementById('template_select');
@@ -153,13 +205,28 @@ function loadSelectedTemplate(){
   loadPost();
 }
 
-function wrapText(id,l,r){const t=document.getElementById(id); const s=t.selectionStart,e=t.selectionEnd; t.value=t.value.slice(0,s)+l+t.value.slice(s,e)+r+t.value.slice(e); updatePreview();}
+function wrapText(id,l,r){
+  const t=document.getElementById(id); const s=t.selectionStart,e=t.selectionEnd;
+  t.value=t.value.slice(0,s)+l+t.value.slice(s,e)+r+t.value.slice(e);
+  updatePreview();
+}
+
+function insertLink(id){
+  const t=document.getElementById(id);
+  const s=t.selectionStart,e=t.selectionEnd;
+  const selected=t.value.slice(s,e) || 'ссылка';
+  const url=prompt('Вставь URL (https://...)');
+  if(!url) return;
+  const link=`[${selected}](${url})`;
+  t.value=t.value.slice(0,s)+link+t.value.slice(e);
+  updatePreview();
+}
 
 function addBlock(block){
   extraBlocks.push(block||{title:'',description:'',color_hex:'2ECC71',image_url:'',image_position:'bottom'});
-  renderBlocks(); updatePreview(); refreshTemplateSelect();
+  renderBlocks(); updatePreview();
 }
-function removeBlock(i){extraBlocks.splice(i,1); renderBlocks(); updatePreview(); refreshTemplateSelect();}
+function removeBlock(i){extraBlocks.splice(i,1); renderBlocks(); updatePreview();}
 function renderBlocks(){
   const root=document.getElementById('extraBlocks'); root.innerHTML='';
   extraBlocks.forEach((b,i)=>{
@@ -192,9 +259,13 @@ function updatePreview(){
   const btns=document.getElementById('btns');
   btns.style.display=p.is_ticket_panel?'flex':'none';
   const o=document.getElementById('p_order'), s=document.getElementById('p_support');
-  o.textContent=`${p.order_emoji} ${p.order_label}`; s.textContent=`${p.support_emoji} ${p.support_label}`;
+  o.textContent=`${p.order_emoji ? p.order_emoji+' ' : ''}${p.order_label}`;
+  s.textContent=`${p.support_emoji ? p.support_emoji+' ' : ''}${p.support_label}`;
   if(p.auto_gradient){o.style.background=`linear-gradient(135deg,#${p.gradient_start_hex},#${p.gradient_end_hex})`; s.style.background=`linear-gradient(135deg,#${p.gradient_end_hex},#${p.gradient_start_hex})`}
   else {o.style.background=styleColor(p.order_style); s.style.background=styleColor(p.support_style)}
+
+  document.getElementById('p_order_ticket').innerHTML = markdownPreview((p.auto_order_message||'').replaceAll('{user}','@Noxi'));
+  document.getElementById('p_support_ticket').innerHTML = markdownPreview((p.auto_support_message||'').replaceAll('{user}','@Noxi'));
 
   const root=document.getElementById('previewBlocks'); root.innerHTML='';
   p.extra_blocks.forEach(b=>{
@@ -228,12 +299,10 @@ async function loadPost(){
   if(d.error)return setStatus(JSON.stringify(d,null,2));
   fields.forEach(k=>{const el=document.getElementById(k); if(!el)return; if(el.type==='checkbox')el.checked=!!d[k]; else el.value=d[k]??''});
   extraBlocks = d.extra_blocks || [];
-  renderBlocks(); updatePreview(); refreshTemplateSelect(); setStatus('Загружено');
+  renderBlocks(); updatePreview(); setStatus('Загружено');
   await refreshTemplateSelect();
 }
-async function listPosts(){const r=await fetch('/api/posts'); const data=await r.json();
-  setStatus(JSON.stringify(data,null,2));
-  await refreshTemplateSelect();}
+async function listPosts(){const r=await fetch('/api/posts'); const data=await r.json(); setStatus(JSON.stringify(data,null,2)); await refreshTemplateSelect();}
 function setStatus(x){document.getElementById('status').textContent=x}
 
 renderBlocks(); updatePreview(); refreshTemplateSelect();

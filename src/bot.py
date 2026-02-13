@@ -478,9 +478,14 @@ class BridgeBot(commands.Bot):
         if post:
             auto_msg = post.auto_order_message if ticket_type == "order" else post.auto_support_message
 
+        if auto_msg:
+            description = auto_msg.replace("{user}", member.mention)
+        else:
+            description = f"Привет, {member.mention}! Опишите задачу подробно."
+
         embed = discord.Embed(
             title=f"{ticket_type.upper()} ticket",
-            description=f"Привет, {member.mention}! {auto_msg or 'Опишите задачу подробно.'}",
+            description=description,
             color=0x5865F2,
         )
         await ticket_channel.send(content=member.mention, embed=embed, view=CloseTicketButton(self))
