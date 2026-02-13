@@ -5,7 +5,7 @@ import os
 import re
 import zipfile
 from datetime import datetime, timezone
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
 import discord
@@ -377,6 +377,66 @@ def style_from_name(name: str) -> ButtonStyle:
         "danger": ButtonStyle.danger,
     }
     return mapping.get(normalize_style_name(name), ButtonStyle.secondary)
+
+
+BUTTON_TAG_RE = re.compile(r"\{\{btn:([^{}]+)\}\}")
+
+
+def parse_button_tags(text: str, *, default_row: int = 0) -> tuple[str, list[PanelButton]]:
+    if not text:
+        return text, []
+
+    out_buttons: list[PanelButton] = []
+    row_cursor = max(0, min(4, default_row))
+
+    def _repl(match: re.Match[str]) -> str:
+        nonlocal row_cursor
+        raw = match.group(1).strip()
+        parts = [x.strip() for x in raw.split("|")]
+        if len(parts) < 2:
+            return match.group(0)
+
+        label = parts[0] or "Button"
+        action = parts[1].lower()
+        style = normalize_style_name(parts[2]) if len(parts) > 2 and parts[2] else "secondary"
+        pos = (parts[3].lower() if len(parts) > 3 and parts[3] else "inline")
+        emoji = parts[4] if len(parts) > 4 else ""
+        extra = parts[5] if len(parts) > 5 else ""
+
+        row = 4 if pos == "bottom" else row_cursor
+        if pos != "bottom":
+            row_cursor = min(4, row_cursor + 1)
+
+        url: str | None = None
+        if action in {"url", "link"}:
+            action = "url"
+            url = extra or None
+            if not url:
+                return f"**[{label}]**"
+
+        if action not in {"order", "support", "url"}:
+            return match.group(0)
+
+        out_buttons.append(
+            PanelButton(
+                label=label,
+                emoji=emoji,
+                style=style,
+                action=action,
+                url=url,
+                row=max(0, min(4, row)),
+            )
+        )
+        return f"**[{(emoji + ' ') if emoji else ''}{label}]**"
+
+    cleaned = BUTTON_TAG_RE.sub(_repl, text)
+    return cleaned, out_buttons
+
+
+def materialize_post_for_send(post: SavedPost) -> SavedPost:
+    cleaned_desc, tag_buttons = parse_button_tags(post.description, default_row=0)
+    merged_buttons = list(post.panel_buttons) + tag_buttons
+    return replace(post, description=cleaned_desc, panel_buttons=merged_buttons)
 
 
 class TicketOpenView(discord.ui.View):
@@ -814,9 +874,10 @@ async def publish_post(bot: BridgeBot, post: SavedPost) -> discord.Message:
     if not isinstance(channel, discord.TextChannel):
         raise ValueError(f"Канал {post.channel_id} не найден")
 
-    embeds = embeds_from_post(post)
-    if post.is_ticket_panel:
-        view = TicketOpenView(bot, post)
+    runtime_post = materialize_post_for_send(post)
+    embeds = embeds_from_post(runtime_post)
+    if runtime_post.is_ticket_panel:
+        view = TicketOpenView(bot, runtime_post)
         return await channel.send(embeds=embeds, view=view)
     return await channel.send(embeds=embeds)
 
