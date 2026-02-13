@@ -970,6 +970,7 @@ async def tg_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         update,
         "Команды:\n"
         "/bind_discord <discord_user_id>\n"
+        "/bind_discord_user <discord_user_id> <tg_user_id> [tg_chat_id] - привязка по ID человека (админ)\n"
         "/set_role <tg_user_id> <admin|manager|builder|viewer> [chat_id]\n"
         "/register_me <role> - зарегистрировать себя и чат для уведомлений\n"
         "/my_role\n"
@@ -990,6 +991,42 @@ async def tg_bind_discord(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if update.effective_user:
             bot.tg_roles.register_chat(update.effective_user.id, update.effective_chat.id)
         await tg_reply(update, f"Привязано ✅ discord={discord_user_id} -> tg_chat={update.effective_chat.id}")
+    except Exception as exc:
+        await tg_reply(update, f"Ошибка: {exc}")
+
+
+async def tg_bind_discord_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    bot: BridgeBot = context.application.bot_data["discord_bot"]
+    if not can_manage_roles(update):
+        await tg_reply(update, "Нет прав. Добавь свой TG user id в TG_ADMIN_IDS")
+        return
+
+    if len(context.args) not in {2, 3}:
+        await tg_reply(update, "Пример: /bind_discord_user 123456789012345678 987654321 [chat_id]")
+        return
+
+    try:
+        discord_user_id = int(context.args[0])
+        tg_user_id = int(context.args[1])
+        if len(context.args) == 3:
+            tg_chat_id = int(context.args[2])
+        else:
+            tg_chat_id = bot.tg_roles.role_chats.get(tg_user_id)
+
+        if tg_chat_id is None:
+            await tg_reply(
+                update,
+                "Не найден chat_id для этого tg_user_id. Передай chat_id 3-м аргументом "
+                "или попроси пользователя выполнить /register_me."
+            )
+            return
+
+        bot.user_links.link(discord_user_id, tg_chat_id)
+        bot.tg_roles.register_chat(tg_user_id, tg_chat_id)
+        await tg_reply(
+            update,
+            f"Привязано ✅ discord={discord_user_id} -> tg_user={tg_user_id} (chat_id={tg_chat_id})"
+        )
     except Exception as exc:
         await tg_reply(update, f"Ошибка: {exc}")
 
@@ -1276,6 +1313,7 @@ async def run() -> None:
 
     tg_app.add_handler(CommandHandler("start", tg_start))
     tg_app.add_handler(CommandHandler("bind_discord", tg_bind_discord))
+    tg_app.add_handler(CommandHandler("bind_discord_user", tg_bind_discord_user))
     tg_app.add_handler(CommandHandler("set_role", tg_set_role))
     tg_app.add_handler(CommandHandler("register_me", tg_register_me))
     tg_app.add_handler(CommandHandler("my_role", tg_my_role))
@@ -1288,7 +1326,8 @@ async def run() -> None:
     await tg_app.bot.set_my_commands(
         [
             BotCommand("start", "Показать команды"),
-            BotCommand("bind_discord", "Привязать Discord пользователя"),
+            BotCommand("bind_discord", "Привязать свой Discord ID"),
+            BotCommand("bind_discord_user", "Привязать Discord по TG user ID"),
             BotCommand("set_role", "Назначить роль пользователю TG"),
             BotCommand("register_me", "Зарегистрировать себя для уведомлений"),
             BotCommand("my_role", "Показать мою роль"),
