@@ -179,6 +179,10 @@ def normalize_saved_post(raw: dict) -> SavedPost:
         )
 
     data["extra_blocks"] = blocks
+    data["order_style"] = normalize_style_name(str(data.get("order_style", "success")))
+    data["support_style"] = normalize_style_name(str(data.get("support_style", "primary")))
+    data["order_emoji"] = str(data.get("order_emoji", "🧾")).strip()
+    data["support_emoji"] = str(data.get("support_emoji", "🛟")).strip()
     clean = {k: v for k, v in data.items() if k in allowed}
 
     # Minimal required fallback for broken legacy records
@@ -198,13 +202,26 @@ class PostStore(JsonStore):
     def load(self) -> None:
         data = self._load()
         out: dict[str, SavedPost] = {}
-        for name, raw in data.items():
+
+        if isinstance(data, list):
+            entries = []
+            for i, item in enumerate(data):
+                if isinstance(item, dict):
+                    nm = str(item.get("name", f"post_{i}")).strip() or f"post_{i}"
+                    entries.append((nm, item))
+        elif isinstance(data, dict):
+            entries = list(data.items())
+        else:
+            entries = []
+
+        for name, raw in entries:
             if not isinstance(raw, dict):
                 continue
             merged = dict(raw)
-            merged.setdefault("name", name)
+            merged.setdefault("name", str(name))
             try:
-                out[name] = normalize_saved_post(merged)
+                post = normalize_saved_post(merged)
+                out[post.name] = post
             except Exception:
                 logger.exception("Skip invalid saved post '%s' during load", name)
         self._posts = out
@@ -299,6 +316,14 @@ class CloseTicketButton(discord.ui.View):
         await interaction.channel.delete(reason="Ticket closed")
 
 
+SUPPORTED_STYLES = {"primary", "secondary", "success", "danger"}
+
+
+def normalize_style_name(name: str) -> str:
+    nm = str(name or "").strip().lower()
+    return nm if nm in SUPPORTED_STYLES else "secondary"
+
+
 def style_from_name(name: str) -> ButtonStyle:
     mapping = {
         "primary": ButtonStyle.primary,
@@ -306,7 +331,7 @@ def style_from_name(name: str) -> ButtonStyle:
         "success": ButtonStyle.success,
         "danger": ButtonStyle.danger,
     }
-    return mapping.get(name, ButtonStyle.secondary)
+    return mapping.get(normalize_style_name(name), ButtonStyle.secondary)
 
 
 class TicketOpenView(discord.ui.View):
@@ -317,13 +342,13 @@ class TicketOpenView(discord.ui.View):
 
         order_btn = discord.ui.Button(
             label=post.order_label,
-            emoji=post.order_emoji,
+            emoji=(post.order_emoji or None),
             style=style_from_name(post.order_style),
             custom_id=f"order:{post.name}",
         )
         support_btn = discord.ui.Button(
             label=post.support_label,
-            emoji=post.support_emoji,
+            emoji=(post.support_emoji or None),
             style=style_from_name(post.support_style),
             custom_id=f"support:{post.name}",
         )
@@ -649,11 +674,11 @@ def parse_post_json(data: dict) -> SavedPost:
         image_position=str(data.get("image_position", "bottom")),
         is_ticket_panel=bool(data.get("is_ticket_panel", False)),
         order_label=str(data.get("order_label", "ORDER")),
-        order_emoji=str(data.get("order_emoji", "🧾")),
-        order_style=str(data.get("order_style", "success")),
+        order_emoji=str(data.get("order_emoji", "🧾")).strip(),
+        order_style=normalize_style_name(str(data.get("order_style", "success"))),
         support_label=str(data.get("support_label", "SUPPORT")),
-        support_emoji=str(data.get("support_emoji", "🛟")),
-        support_style=str(data.get("support_style", "primary")),
+        support_emoji=str(data.get("support_emoji", "🛟")).strip(),
+        support_style=normalize_style_name(str(data.get("support_style", "primary"))),
         auto_gradient=bool(data.get("auto_gradient", False)),
         gradient_start_hex=str(data.get("gradient_start_hex", "2ECC71")),
         gradient_end_hex=str(data.get("gradient_end_hex", "5865F2")),

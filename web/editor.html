@@ -35,6 +35,10 @@
     <h2>Редактор постов</h2>
     <label>Имя шаблона</label><input id="name" value="ticket">
     <div class="row">
+      <div><label>Выбрать сохраненный</label><select id="template_select"><option value="">--</option></select></div>
+      <div style="display:flex;align-items:flex-end"><button class="dark" onclick="loadSelectedTemplate()">Загрузить выбранный</button></div>
+    </div>
+    <div class="row">
       <div><label>Channel ID</label><input id="channel_id" placeholder="123..."></div>
       <div><label>Цвет линии</label><input id="color_hex" value="2ECC71"></div>
     </div>
@@ -133,13 +137,29 @@ function payload(){
   };
 }
 
+
+async function refreshTemplateSelect(){
+  const sel=document.getElementById('template_select');
+  const r=await fetch('/api/posts');
+  const list=await r.json();
+  const names=list.map(x=>x.name).filter(Boolean).sort();
+  sel.innerHTML='<option value="">--</option>'+names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+}
+
+function loadSelectedTemplate(){
+  const sel=document.getElementById('template_select');
+  if(!sel.value) return setStatus('Выбери шаблон');
+  document.getElementById('name').value=sel.value;
+  loadPost();
+}
+
 function wrapText(id,l,r){const t=document.getElementById(id); const s=t.selectionStart,e=t.selectionEnd; t.value=t.value.slice(0,s)+l+t.value.slice(s,e)+r+t.value.slice(e); updatePreview();}
 
 function addBlock(block){
   extraBlocks.push(block||{title:'',description:'',color_hex:'2ECC71',image_url:'',image_position:'bottom'});
-  renderBlocks(); updatePreview();
+  renderBlocks(); updatePreview(); refreshTemplateSelect();
 }
-function removeBlock(i){extraBlocks.splice(i,1); renderBlocks(); updatePreview();}
+function removeBlock(i){extraBlocks.splice(i,1); renderBlocks(); updatePreview(); refreshTemplateSelect();}
 function renderBlocks(){
   const root=document.getElementById('extraBlocks'); root.innerHTML='';
   extraBlocks.forEach((b,i)=>{
@@ -190,13 +210,17 @@ function updatePreview(){
 async function savePost(){
   const p=payload(); if(!p.name||!p.channel_id) return setStatus('Нужны name и channel_id');
   const r=await fetch('/api/posts/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
-  setStatus(JSON.stringify(await r.json(),null,2));
+  const data=await r.json();
+  setStatus(JSON.stringify(data,null,2));
+  await refreshTemplateSelect();
 }
 async function publishPost(){
   const p=payload(); if(!p.name)return setStatus('Сначала name');
   await savePost();
   const r=await fetch(`/api/posts/${encodeURIComponent(p.name)}/publish`,{method:'POST'});
-  setStatus(JSON.stringify(await r.json(),null,2));
+  const data=await r.json();
+  setStatus(JSON.stringify(data,null,2));
+  await refreshTemplateSelect();
 }
 async function loadPost(){
   const name=val('name').trim().toLowerCase(); if(!name)return setStatus('Укажи name');
@@ -204,12 +228,15 @@ async function loadPost(){
   if(d.error)return setStatus(JSON.stringify(d,null,2));
   fields.forEach(k=>{const el=document.getElementById(k); if(!el)return; if(el.type==='checkbox')el.checked=!!d[k]; else el.value=d[k]??''});
   extraBlocks = d.extra_blocks || [];
-  renderBlocks(); updatePreview(); setStatus('Загружено');
+  renderBlocks(); updatePreview(); refreshTemplateSelect(); setStatus('Загружено');
+  await refreshTemplateSelect();
 }
-async function listPosts(){const r=await fetch('/api/posts'); setStatus(JSON.stringify(await r.json(),null,2));}
+async function listPosts(){const r=await fetch('/api/posts'); const data=await r.json();
+  setStatus(JSON.stringify(data,null,2));
+  await refreshTemplateSelect();}
 function setStatus(x){document.getElementById('status').textContent=x}
 
-renderBlocks(); updatePreview();
+renderBlocks(); updatePreview(); refreshTemplateSelect();
 </script>
 </body>
 </html>
