@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 import discord
@@ -147,6 +147,48 @@ class TicketStore(JsonStore):
         self.save()
 
 
+
+
+def normalize_saved_post(raw: dict) -> SavedPost:
+    allowed = {f.name for f in fields(SavedPost)}
+    data = dict(raw)
+
+    # Legacy migration: old split_* fields -> extra block continuation
+    split_enabled = bool(data.pop("split_enabled", False))
+    split_title = str(data.pop("split_title", "")).strip()
+    split_description = str(data.pop("split_description", "")).strip()
+    split_color_hex = str(data.pop("split_color_hex", data.get("color_hex", "2ECC71"))).strip()
+
+    raw_blocks = data.get("extra_blocks", []) or []
+    blocks: list[ExtraBlock] = []
+    for block in raw_blocks:
+        if isinstance(block, dict):
+            block_allowed = {f.name for f in fields(ExtraBlock)}
+            clean_block = {k: v for k, v in block.items() if k in block_allowed}
+            blocks.append(ExtraBlock(**clean_block))
+
+    if split_enabled and (split_title or split_description):
+        blocks.append(
+            ExtraBlock(
+                title=split_title,
+                description=split_description,
+                color_hex=split_color_hex or "2ECC71",
+                image_url=None,
+                image_position="bottom",
+            )
+        )
+
+    data["extra_blocks"] = blocks
+    clean = {k: v for k, v in data.items() if k in allowed}
+
+    # Minimal required fallback for broken legacy records
+    clean.setdefault("name", str(raw.get("name", "post")))
+    clean.setdefault("channel_id", int(raw.get("channel_id", 0)))
+    clean.setdefault("title", str(raw.get("title", "")))
+    clean.setdefault("description", str(raw.get("description", "")))
+
+    return SavedPost(**clean)
+
 class PostStore(JsonStore):
     def __init__(self, path: Path):
         super().__init__(path)
@@ -157,9 +199,14 @@ class PostStore(JsonStore):
         data = self._load()
         out: dict[str, SavedPost] = {}
         for name, raw in data.items():
-            raw_blocks = raw.get("extra_blocks", [])
-            raw["extra_blocks"] = [ExtraBlock(**b) for b in raw_blocks]
-            out[name] = SavedPost(**raw)
+            if not isinstance(raw, dict):
+                continue
+            merged = dict(raw)
+            merged.setdefault("name", name)
+            try:
+                out[name] = normalize_saved_post(merged)
+            except Exception:
+                logger.exception("Skip invalid saved post '%s' during load", name)
         self._posts = out
 
     def save(self) -> None:
