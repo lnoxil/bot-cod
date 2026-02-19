@@ -551,6 +551,19 @@ class BridgeBot(commands.Bot):
     async def setup_hook(self) -> None:
         self.add_view(CloseTicketButton(self))
 
+        restored = 0
+        for post in self.post_store.list_posts():
+            runtime_post = materialize_post_for_send(post)
+            if not (runtime_post.is_ticket_panel or runtime_post.panel_buttons):
+                continue
+            try:
+                self.add_view(TicketOpenView(self, runtime_post))
+                restored += 1
+            except Exception:
+                logger.exception("Failed to restore persistent panel view for post '%s'", post.name)
+        if restored:
+            logger.info("Restored %s persistent ticket panel view(s)", restored)
+
     async def send_tg(self, chat_id: int, text: str) -> None:
         if not self.tg_app:
             return
