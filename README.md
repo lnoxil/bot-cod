@@ -175,6 +175,34 @@ sudo ufw allow 8080/tcp
 ```
 
 
+
+## Автодеплой на VDS одной командой
+Добавлен скрипт `scripts/deploy_vds.sh`, который автоматически:
+- архивирует текущий проект,
+- загружает его по SSH на VDS,
+- ставит Docker (если его нет),
+- запускает/обновляет контейнер через `docker compose up -d --build`.
+
+Пример запуска для вашего сервера:
+```bash
+DEPLOY_HOST=194.87.55.48 DEPLOY_USER=root ./scripts/deploy_vds.sh
+```
+
+Опциональные параметры:
+```bash
+DEPLOY_PORT=22 DEPLOY_PATH=/opt/bridge-bot DEPLOY_HOST=194.87.55.48 DEPLOY_USER=root ./scripts/deploy_vds.sh
+```
+
+Требования:
+- На локальном ПК должны быть `ssh`, `scp`, `tar`.
+- Настроен доступ по SSH (лучше по ключу).
+- В корне проекта заполнен `.env` (иначе скрипт остановится).
+
+После деплоя посмотреть логи:
+```bash
+ssh root@194.87.55.48 "cd /opt/bridge-bot && docker compose logs -f"
+```
+
 Дополнительно в редакторе:
 - вкладка **ORDER/SUPPORT ticket** для редактирования авто-сообщений тикетов;
 - поддержка шаблона `{user}` (в Discord заменится на упоминание пользователя);
