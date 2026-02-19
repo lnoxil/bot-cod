@@ -109,6 +109,71 @@ journalctl -u bridge-bot -f
 
 Редактор: `http://localhost:8080`
 
+## Запуск на VDS через Docker
+Да, можно. На вашем Ubuntu VDS бот отлично запускается в контейнере.
+
+1. Установить Docker + Compose plugin:
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+2. Создать `Dockerfile` в корне проекта:
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY web ./web
+COPY .env.example ./.env.example
+
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+
+CMD ["python", "src/bot.py"]
+```
+
+3. Создать `docker-compose.yml`:
+```yaml
+services:
+  bridge-bot:
+    build: .
+    container_name: bridge-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./state:/app/state
+```
+
+4. Подготовить `.env` и запустить:
+```bash
+cp .env.example .env
+nano .env
+docker compose up -d --build
+```
+
+5. Проверка и логи:
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+Редактор будет доступен снаружи по адресу: `http://<VDS_IP>:8080`.
+
+Открыть порт на сервере (если включен firewall):
+```bash
+sudo ufw allow 8080/tcp
+```
+
 
 Дополнительно в редакторе:
 - вкладка **ORDER/SUPPORT ticket** для редактирования авто-сообщений тикетов;
