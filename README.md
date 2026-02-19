@@ -50,6 +50,63 @@ cp .env.example .env
 python src/bot.py
 ```
 
+## Запуск на Linux (Ubuntu 24.04 LTS)
+1. Установить Python и venv:
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip
+```
+
+2. Клонировать проект и установить зависимости:
+```bash
+git clone <YOUR_REPO_URL>
+cd bot-cod
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .
+```
+
+3. Заполнить переменные окружения:
+```bash
+cp .env.example .env
+nano .env
+```
+
+4. Запустить бота:
+```bash
+source .venv/bin/activate
+python src/bot.py
+```
+
+5. (Опционально) Автозапуск через systemd:
+```ini
+# /etc/systemd/system/bridge-bot.service
+[Unit]
+Description=Discord Telegram Bridge Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/bot-cod
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ubuntu/bot-cod/.venv/bin/python /home/ubuntu/bot-cod/src/bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable bridge-bot
+sudo systemctl start bridge-bot
+sudo systemctl status bridge-bot
+journalctl -u bridge-bot -f
+```
+
 Редактор: `http://localhost:8080`
 
 
