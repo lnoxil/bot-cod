@@ -12,6 +12,8 @@
 ## Telegram команды
 - `/start`
 - `/bind_discord <discord_user_id>`
+- `/bind_discord_user <discord_user_id> <tg_user_id> [chat_id]` (admin)
+- `/add_notify_user <tg_user_id> [chat_id]` (admin, получать все уведомления)
 - `/register_me <admin|manager|builder|viewer>`
 - `/set_role <tg_user_id> <admin|manager|builder|viewer> [chat_id]`
 - `/my_role`
@@ -28,10 +30,15 @@
 - диалог сохраняется в `dialog.txt` и `dialog.docx`;
 - после закрытия приходит сообщение с 3 кнопками оценки: "Заказ успешно", "Нейтрально", "Не выполнен"; после нажатия кнопки остальные исчезают.
 - редактор поддерживает настраиваемые кнопки панели (`panel_buttons`) с действием `order`/`support`/`url` и размещением по рядам (`row 0..4`) — можно собирать layout ближе к референсу.
-- в описании поста поддерживаются теги кнопок: `{{btn:Текст|order|success|inline|🛒}}`, `{{btn:Get Support|support|secondary|row1}}`, `{{btn:Verify|url|secondary|bottom||https://site.com}}` — кнопка визуально отображается внутри текста и привязывается к действию бота/URL.
+- в описании поста поддерживаются теги кнопок: `{{btn:Текст|order|success|inline|🛒}}`, `{{btn:Get Support|support|secondary|row1}}`, `{{btn:Verify|url|secondary|bottom||https://site.com}}` — тег в тексте превращается в рабочую кнопку компонента (под сообщением) и привязывается к действию бота/URL.
 - даже если `ticket panel` выключен, но в описании есть `{{btn:...}}`, бот всё равно прикрепит рабочие кнопки к сообщению.
 - важно: Discord API не умеет вставлять интерактивные кнопки прямо внутрь текста embed, поэтому реальные кнопки всегда отображаются блоком components под embed (это ограничение Discord).
+- по API Discord: интерактивные кнопки отправляются как `message components` и рендерятся отдельным блоком под сообщением; встроить кликабельную кнопку прямо внутрь текста embed нельзя.
+  - см. Discord Developer Docs: Message Components / Action Rows (https://discord.com/developers/docs/components/overview).
 
+- добавлен режим layout для embed: **sidebar** (текущий вид с цветной полосой слева), **window** (один большой блок с секциями) и **container** (большие контейнеры как в референсе).
+- режим `window` теперь собирает `extra_blocks` как `embed fields` (`inline=False`) в одном embed, чтобы структура была как в референсе: заголовок/описание + секции ниже в одном сообщении.
+- режим `container` теперь собирает контент в один большой embed-контейнер и автоматически делит длинный текст на continuation embeds, чтобы текст не обрезался по лимитам Discord.
 - в Telegram формируется единое сообщение-дайджест по тикету (последние 5 сообщений клиента), которое редактируется при изменении/удалении сообщений в Discord.
 
 ## .env

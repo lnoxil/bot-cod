@@ -59,6 +59,10 @@
         <div><label>Channel ID</label><input id="channel_id" placeholder="123..."></div>
         <div><label>Цвет линии</label><input id="color_hex" value="2ECC71"></div>
       </div>
+      <div class="row">
+        <div><label>Режим отображения</label><select id="layout_mode"><option value="sidebar">Боковая панель (как сейчас)</option><option value="window">Окно (один большой блок с секциями)</option><option value="container">Большие контейнеры (как в примере)</option></select></div>
+        <div></div>
+      </div>
       <label>Заголовок</label><input id="title" value="CapybarBuild">
 
       <label>Описание</label>
@@ -74,6 +78,7 @@
       </div>
       <textarea id="description">🎁: We work with projects of any complexity and are ready to create something amazing for you</textarea>
       <small style="color:#9aa7b8">Тег кнопки: <code>{{btn:Текст|order|success|inline|🛒}}</code>, <code>{{btn:Get Support|support|secondary|row1}}</code> или <code>{{btn:Verify|url|secondary|bottom||https://site.com}}</code>.</small>
+      <small style="color:#ffb86b">Важно: Discord-кнопки нельзя встроить внутрь текста embed — они всегда отображаются отдельным блоком под постом.</small>
 
       <div class="row">
         <div><label>Image URL</label><input id="image_url" placeholder="https://..."></div>
@@ -165,7 +170,7 @@
 </div>
 
 <script>
-const fields=["name","channel_id","title","description","color_hex","image_url","image_position","auto_gradient","gradient_start_hex","gradient_end_hex","is_ticket_panel","order_label","order_emoji","order_style","support_label","support_emoji","support_style","auto_order_message","auto_support_message"];
+const fields=["name","channel_id","title","description","color_hex","layout_mode","image_url","image_position","auto_gradient","gradient_start_hex","gradient_end_hex","is_ticket_panel","order_label","order_emoji","order_style","support_label","support_emoji","support_style","auto_order_message","auto_support_message"];
 fields.forEach(id=>{const el=document.getElementById(id); el.addEventListener('input', updatePreview); el.addEventListener('change', updatePreview);});
 
 let extraBlocks=[];
@@ -181,14 +186,28 @@ function val(id){return document.getElementById(id).value}
 function chk(id){return document.getElementById(id).checked}
 
 function styleColor(style){if(style==='success')return '#2ecc71'; if(style==='primary')return '#5865f2'; if(style==='danger')return '#ed4245'; return '#4f545c';}
+function extractButtonsFromTags(text){
+  const out=[];
+  const cleaned=(text||'').replace(/\{\{btn:([^{}]+)\}\}/g,(_,raw)=>{
+    const p=String(raw||'').split('|').map(v=>v.trim());
+    const label=p[0]||'Button';
+    const action=(p[1]||'none').toLowerCase();
+    const style=(p[2]||'secondary').toLowerCase();
+    const pos=(p[3]||'inline').toLowerCase();
+    const emoji=p[4]||'';
+    const extra=p[5]||'';
+    const row = pos==='bottom' ? 4 : (pos.startsWith('row') ? Math.max(0,Math.min(4,parseInt(pos.slice(3),10)||0)) : 0);
+    const mappedAction = action==='link' ? 'url' : action;
+    if(['order','support','url'].includes(mappedAction)){
+      out.push({label,emoji,style,action:mappedAction,url:mappedAction==='url'?extra:'',row});
+    }
+    return `${emoji?emoji+' ':''}${label}`;
+  });
+  return {cleaned,buttons:out};
+}
+
 function markdownPreview(x){
   return (x||'')
-    .replace(/\{\{btn:([^{}]+)\}\}/g,(_,raw)=>{
-      const p=String(raw||'').split('|').map(v=>v.trim());
-      const label=p[0]||'Button';
-      const emoji=p[4]?p[4]+' ':'';
-      return `<span style="display:inline-block;padding:2px 8px;border-radius:8px;background:#3f4655;color:#fff;font-weight:700">${emoji}${label}</span>`;
-    })
     .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')
     .replace(/\*(.*?)\*/g,'<i>$1</i>')
@@ -197,10 +216,11 @@ function markdownPreview(x){
     .replace(/\n/g,'<br>')
 }
 
+
 function payload(){
   return {
     name: val('name').trim().toLowerCase(), channel_id: val('channel_id').trim(), title: val('title'), description: val('description'),
-    color_hex: val('color_hex').replace('#',''), image_url: val('image_url').trim(), image_position: val('image_position'),
+    color_hex: val('color_hex').replace('#',''), layout_mode: val('layout_mode'), image_url: val('image_url').trim(), image_position: val('image_position'),
     auto_gradient: chk('auto_gradient'), gradient_start_hex: val('gradient_start_hex').replace('#',''), gradient_end_hex: val('gradient_end_hex').replace('#',''),
     is_ticket_panel: chk('is_ticket_panel'), order_label: val('order_label'), order_emoji: val('order_emoji').trim(), order_style: val('order_style'),
     support_label: val('support_label'), support_emoji: val('support_emoji').trim(), support_style: val('support_style'),
@@ -300,14 +320,42 @@ function renderBlocks(){
 }
 function escapeHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
+function normalizeRuntimeButtons(p, fromTags){
+  const runtime=[...(Array.isArray(p.panel_buttons)?p.panel_buttons:[]), ...fromTags.buttons];
+  if((p.layout_mode==='window' || p.layout_mode==='container') && runtime.length){
+    const hasExplicitRows = runtime.some(b => (parseInt(b.row||0,10)||0) !== 0);
+    if(!hasExplicitRows){
+      runtime.forEach((b,i)=>{ b.row=Math.max(0,Math.min(4,i)); });
+    }
+  }
+  return runtime;
+}
+
 function updatePreview(){
   const p=payload();
   document.getElementById('p_title').textContent=p.title||'(без заголовка)';
-  document.getElementById('p_desc').innerHTML=markdownPreview(p.description||'(без текста)');
+  const fromTags=extractButtonsFromTags(p.description||'');
+  document.getElementById('p_desc').innerHTML=markdownPreview(fromTags.cleaned||'(без текста)');
 
   const pr=document.getElementById('preview');
-  if(p.auto_gradient){pr.style.borderImage=`linear-gradient(180deg,#${p.gradient_start_hex},#${p.gradient_end_hex}) 1`; pr.style.borderLeftWidth='4px'; pr.style.borderLeftStyle='solid';}
-  else {pr.style.borderImage='none'; pr.style.borderLeftColor='#'+(p.color_hex||'2ECC71');}
+  if(p.layout_mode==='window' || p.layout_mode==='container'){
+    pr.style.borderImage='none';
+    pr.style.borderLeftStyle='none';
+    pr.style.borderLeftWidth='0';
+    pr.style.border='1px solid #3a404f';
+  } else if(p.auto_gradient){
+    pr.style.border='none';
+    pr.style.borderImage=`linear-gradient(180deg,#${p.gradient_start_hex},#${p.gradient_end_hex}) 1`;
+    pr.style.borderLeftWidth='4px';
+    pr.style.borderLeftStyle='solid';
+  }
+  else {
+    pr.style.border='none';
+    pr.style.borderImage='none';
+    pr.style.borderLeftColor='#'+(p.color_hex||'2ECC71');
+    pr.style.borderLeftWidth='4px';
+    pr.style.borderLeftStyle='solid';
+  }
 
   const top=document.getElementById('p_img_top'), bot=document.getElementById('p_img_bottom');
   top.style.display='none'; bot.style.display='none';
@@ -323,15 +371,16 @@ function updatePreview(){
   if(p.auto_gradient){o.style.background=`linear-gradient(135deg,#${p.gradient_start_hex},#${p.gradient_end_hex})`; s.style.background=`linear-gradient(135deg,#${p.gradient_end_hex},#${p.gradient_start_hex})`}
   else {o.style.background=styleColor(p.order_style); s.style.background=styleColor(p.support_style)}
 
-  if(p.is_ticket_panel && Array.isArray(p.panel_buttons) && p.panel_buttons.length){
+  const runtimeButtons=normalizeRuntimeButtons(p, fromTags);
+  if(runtimeButtons.length){
     btns.style.display='none';
     const byRow={};
-    p.panel_buttons.forEach(b=>{const r=Math.max(0,Math.min(4,parseInt(b.row||0,10)||0)); (byRow[r]||(byRow[r]=[])).push(b);});
+    runtimeButtons.forEach(b=>{const r=Math.max(0,Math.min(4,parseInt(b.row||0,10)||0)); (byRow[r]||(byRow[r]=[])).push(b);});
     Object.keys(byRow).sort((a,b)=>+a-+b).forEach(r=>{
       const row=document.createElement('div'); row.className='btn-row';
       byRow[r].forEach(b=>{
         const chip=document.createElement('div'); chip.className='btn-chip';
-        chip.style.background=styleColor(b.style||'secondary');
+        chip.style.background=b.action==='url' ? '#4f545c' : styleColor(b.style||'secondary');
         chip.textContent=`${b.emoji?b.emoji+' ':''}${b.label||'Button'}`;
         row.appendChild(chip);
       });
@@ -343,14 +392,50 @@ function updatePreview(){
   document.getElementById('p_support_ticket').innerHTML = markdownPreview((p.auto_support_message||'').replaceAll('{user}','@Noxi'));
 
   const root=document.getElementById('previewBlocks'); root.innerHTML='';
-  p.extra_blocks.forEach(b=>{
-    const div=document.createElement('div'); div.className='preview'; div.style.marginTop='10px'; div.style.borderLeftColor='#'+(b.color_hex||'2ECC71');
-    div.innerHTML=`<div class='title' style='font-size:22px'>${escapeHtml(b.title||'Продолжение')}</div>`+
-      `${b.image_url&&b.image_position==='top'?`<img class='img' src='${escapeHtml(b.image_url)}'>`:''}`+
-      `<div class='desc'>${markdownPreview(b.description||'')}</div>`+
-      `${b.image_url&&b.image_position!=='top'?`<img class='img' src='${escapeHtml(b.image_url)}'>`:''}`;
-    root.appendChild(div);
-  })
+  if(p.layout_mode==='container' && p.extra_blocks.length){
+    const outer=document.createElement('div');
+    outer.className='preview';
+    outer.style.marginTop='10px';
+    outer.style.border='1px solid #2f3744';
+    outer.style.borderLeft='none';
+    p.extra_blocks.forEach((b,i)=>{
+      const row=document.createElement('div');
+      row.className='block';
+      row.style.background='transparent';
+      row.style.marginTop = i===0 ? '0' : '8px';
+      row.style.border='none';
+      const btn=runtimeButtons[i];
+      row.innerHTML=`<div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">`
+        +`<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:26px;margin-bottom:4px">${escapeHtml(b.title||'Section')}</div><div class='desc'>${markdownPreview(b.description||'')}</div></div>`
+        +`${btn?`<div class='btn-chip' style='white-space:nowrap;background:${btn.action==='url' ? '#4f545c' : styleColor(btn.style||'secondary')}' >${escapeHtml((btn.emoji?btn.emoji+' ':'')+(btn.label||'Button'))}</div>`:''}`
+        +`</div>`;
+      outer.appendChild(row);
+    });
+    root.appendChild(outer);
+  } else if(p.layout_mode==='window' && p.extra_blocks.length){
+    p.extra_blocks.forEach((b,i)=>{
+      const row=document.createElement('div');
+      row.className='block';
+      row.style.background='#1f2430';
+      row.style.marginTop='8px';
+      row.style.border='1px solid #2f3744';
+      const btn=runtimeButtons[i];
+      row.innerHTML=`<div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">`
+        +`<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:26px;margin-bottom:4px">${escapeHtml(b.title||'Section')}</div><div class='desc'>${markdownPreview(b.description||'')}</div></div>`
+        +`${btn?`<div class='btn-chip' style='white-space:nowrap;background:${btn.action==='url' ? '#4f545c' : styleColor(btn.style||'secondary')}' >${escapeHtml((btn.emoji?btn.emoji+' ':'')+(btn.label||'Button'))}</div>`:''}`
+        +`</div>`;
+      root.appendChild(row);
+    });
+  } else {
+    p.extra_blocks.forEach(b=>{
+      const div=document.createElement('div'); div.className='preview'; div.style.marginTop='10px'; div.style.borderLeftColor='#'+(b.color_hex||'2ECC71');
+      div.innerHTML=`<div class='title' style='font-size:22px'>${escapeHtml(b.title||'Продолжение')}</div>`+
+        `${b.image_url&&b.image_position==='top'?`<img class='img' src='${escapeHtml(b.image_url)}'>`:''}`+
+        `<div class='desc'>${markdownPreview(b.description||'')}</div>`+
+        `${b.image_url&&b.image_position!=='top'?`<img class='img' src='${escapeHtml(b.image_url)}'>`:''}`;
+      root.appendChild(div);
+    })
+  }
 }
 
 async function savePost(){
