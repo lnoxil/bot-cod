@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discord Embed Editor Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      color: #e4e8f0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 30px;
+      background: linear-gradient(135deg, #5865f2 0%, #7289da 100%);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(88, 101, 242, 0.3);
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .header p {
+      font-size: 1rem;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 500;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .panel {
+      background: rgba(35, 39, 51, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(88, 101, 242, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid rgba(88, 101, 242, 0.3);
+    }
+
+    .panel-header h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .panel-header .icon {
+      font-size: 1.8rem;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #b9bbbe;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(25, 28, 38, 0.8);
+      border: 2px solid rgba(88, 101, 242, 0.2);
+      border-radius: 10px;
+      color: #e4e8f0;
+      font-size: 0.95rem;
+      font-family: inherit;
+      transition: all 0.3s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: #5865f2;
+      box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.2);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar button {
+      padding: 8px 14px;
+      background: rgba(88, 101, 242, 0.15);
+      border: 2px solid rgba(88, 101, 242, 0.3);
+      border-radius: 8px;
+      color: #7289da;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .toolbar button:hover {
+      background: rgba(88, 101, 242, 0.3);
+      border-color: #5865f2;
+      color: #ffffff;
+      transform: translateY(-2px);
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #5865f2 0%, #7289da 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(88, 101, 242, 0.6);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #43b581 0%, #3aa76d 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(67, 181, 129, 0.4);
+    }
+
+    .btn-success:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(67, 181, 129, 0.6);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #f04747 0%, #d84040 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(240, 71, 71, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(79, 84, 92, 0.8);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(79, 84, 92, 1);
+      transform: translateY(-2px);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 2px solid rgba(88, 101, 242, 0.2);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      background: rgba(25, 28, 38, 0.6);
+      padding: 6px;
+      border-radius: 10px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 12px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: #b9bbbe;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .tab.active {
+      background: linear-gradient(135deg, #5865f2 0%, #7289da 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+    }
+
+    .tab:hover:not(.active) {
+      background: rgba(88, 101, 242, 0.1);
+      color: #7289da;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Preview Styles */
+    .preview-container {
+      background: #2b2d31;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .discord-embed {
+      background: #2b2d31;
+      border-left: 4px solid #2ecc71;
+      border-radius: 4px;
+      padding: 16px;
+      margin: 16px;
+    }
+
+    .discord-embed.container-mode {
+      border: 1px solid #3a404f;
+      border-left: none;
+    }
+
+    .embed-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .embed-description {
+      color: #dbdee1;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .embed-image {
+      max-width: 100%;
+      border-radius: 8px;
+      margin: 12px 0;
+    }
+
+    .embed-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .discord-button {
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .discord-button.primary {
+      background-color: #5865f2;
+    }
+
+    .discord-button.success {
+      background-color: #43b581;
+    }
+
+    .discord-button.secondary {
+      background-color: #4f545c;
+    }
+
+    .discord-button.danger {
+      background-color: #f04747;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .extra-block {
+      background: #1f2430;
+      border: 1px solid #2f3744;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .extra-block.container-style {
+      background: transparent;
+      border: none;
+      border-top: 1px solid #2f3744;
+      padding-top: 16px;
+    }
+
+    .extra-block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .extra-block-content {
+      flex: 1;
+    }
+
+    .extra-block-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    /* Block Editor */
+    .blocks-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 2px solid rgba(88, 101, 242, 0.2);
+    }
+
+    .blocks-section h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .block-item,
+    .button-item {
+      background: rgba(25, 28, 38, 0.6);
+      border: 2px solid rgba(88, 101, 242, 0.2);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .block-item:hover,
+    .button-item:hover {
+      border-color: rgba(88, 101, 242, 0.5);
+      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.2);
+    }
+
+    .block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .block-title {
+      font-weight: 700;
+      color: #7289da;
+    }
+
+    .btn-remove {
+      padding: 6px 12px;
+      background: rgba(240, 71, 71, 0.2);
+      border: 2px solid rgba(240, 71, 71, 0.3);
+      border-radius: 6px;
+      color: #f04747;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-remove:hover {
+      background: rgba(240, 71, 71, 0.3);
+      transform: scale(1.05);
+    }
+
+    .status-box {
+      background: rgba(25, 28, 38, 0.8);
+      border: 2px solid rgba(88, 101, 242, 0.3);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.875rem;
+      color: #9ad0ff;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .checkbox-group label {
+      margin: 0;
+      text-transform: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: #72767d;
+      margin-top: 6px;
+      font-style: italic;
+    }
+
+    .warning {
+      background: rgba(250, 166, 26, 0.1);
+      border-left: 4px solid #faa61a;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 12px 0;
+      font-size: 0.875rem;
+      color: #faa61a;
+    }
+
+    @media (max-width: 1200px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .row {
+        grid-template-columns: 1fr;
+      }
+      
+      .header h1 {
+        font-size: 1.8rem;
+      }
+      
+      .action-buttons {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+      }
+    }
+
+    /* Loading animation */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(25, 28, 38, 0.5);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(88, 101, 242, 0.5);
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(88, 101, 242, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🎨 Discord Embed Editor Pro</h1>
+      <p>Создавайте красивые embed-сообщения с кнопками для Discord</p>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="main-grid">
+      <!-- Editor Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2><span class="icon">✏️</span> Редактор</h2>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" data-tab="post" onclick="switchTab('post')">📝 Пост</button>
+          <button class="tab" data-tab="buttons" onclick="switchTab('buttons')">🔘 Кнопки</button>
+          <button class="tab" data-tab="blocks" onclick="switchTab('blocks')">📦 Блоки</button>
+          <button class="tab" data-tab="ticket" onclick="switchTab('ticket')">🎫 Тикеты</button>
+        </div>
+
+        <!-- Post Tab -->
+        <div class="tab-panel active" id="panel-post">
+          <div class="form-group">
+            <label>Имя шаблона</label>
+            <input type="text" id="name" value="my-embed" placeholder="unique-name">
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Загрузить шаблон</label>
+              <select id="template_select">
+                <option value="">-- Выберите шаблон --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>&nbsp;</label>
+              <button class="btn btn-secondary" onclick="loadSelectedTemplate()">Загрузить</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Channel ID</label>
+              <input type="text" id="channel_id" placeholder="1234567890">
+              <div class="hint">ID канала Discord, куда отправить сообщение</div>
+            </div>
+            <div class="form-group">
+              <label>Цвет линии (HEX)</label>
+              <input type="text" id="color_hex" value="2ECC71" placeholder="2ECC71">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Режим отображения</label>
+            <select id="layout_mode">
+              <option value="sidebar">Sidebar - Боковая панель</option>
+              <option value="window">Window - Окно с секциями</option>
+              <option value="container">Container - Большие контейнеры</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Заголовок</label>
+            <input type="text" id="title" value="✨ Наш сервис" placeholder="Заголовок embed">
+          </div>
+
+          <div class="form-group">
+            <label>Описание</label>
+            <div class="toolbar">
+              <button onclick="wrapText('description','**','**')">Жирный</button>
+              <button onclick="wrapText('description','*','*')">Курсив</button>
+              <button onclick="wrapText('description','__','__')">Подчёрк</button>
+              <button onclick="wrapText('description','~~','~~')">Зачёрк</button>
+              <button onclick="wrapText('description','```\n','\n```')">Код</button>
+              <button onclick="wrapText('description','> ','')">Цитата</button>
+              <button onclick="insertLink('description')">Ссылка</button>
+            </div>
+            <textarea id="description">🎯 Мы предлагаем качественные услуги по разработке
+
+**Что мы делаем:**
+• Разработка Discord ботов
+• Создание сайтов
+• Дизайн и оформление
+
+Свяжитесь с нами прямо сейчас!</textarea>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>URL изображения</label>
+              <input type="text" id="image_url" placeholder="https://example.com/image.png">
+            </div>
+            <div class="form-group">
+              <label>Позиция изображения</label>
+              <select id="image_position">
+                <option value="bottom">Снизу</option>
+                <option value="top">Сверху</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checkbox-group">
+            <input type="checkbox" id="auto_gradient">
+            <label for="auto_gradient">Использовать градиент вместо цвета</label>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Начало градиента</label>
+              <input type="text" id="gradient_start_hex" value="2ECC71">
+            </div>
+            <div class="form-group">
+              <label>Конец градиента</label>
+              <input type="text" id="gradient_end_hex" value="5865F2">
+            </div>
+          </div>
+
+          <div class="checkbox-group">
+            <input type="checkbox" id="is_ticket_panel">
+            <label for="is_ticket_panel">Это панель для тикетов (ORDER/SUPPORT)</label>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Текст кнопки ORDER</label>
+              <input type="text" id="order_label" value="ORDER">
+            </div>
+            <div class="form-group">
+              <label>Emoji для ORDER</label>
+              <input type="text" id="order_emoji" value="🧾" placeholder="🧾">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Стиль кнопки ORDER</label>
+              <select id="order_style">
+                <option value="success">Зелёная (Success)</option>
+                <option value="primary">Синяя (Primary)</option>
+                <option value="secondary">Серая (Secondary)</option>
+                <option value="danger">Красная (Danger)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Стиль кнопки SUPPORT</label>
+              <select id="support_style">
+                <option value="primary">Синяя (Primary)</option>
+                <option value="success">Зелёная (Success)</option>
+                <option value="secondary">Серая (Secondary)</option>
+                <option value="danger">Красная (Danger)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Текст кнопки SUPPORT</label>
+              <input type="text" id="support_label" value="SUPPORT">
+            </div>
+            <div class="form-group">
+              <label>Emoji для SUPPORT</label>
+              <input type="text" id="support_emoji" value="🛟" placeholder="🛟">
+            </div>
+          </div>
+        </div>
+
+        <!-- Buttons Tab -->
+        <div class="tab-panel" id="panel-buttons">
+          <div class="blocks-section">
+            <h3>🔘 Пользовательские кнопки</h3>
+            <div class="hint">Добавьте свои кнопки. Они будут показаны вместо ORDER/SUPPORT, если активны.</div>
+            <div id="panelButtons"></div>
+            <button class="btn btn-primary" onclick="addPanelButton()">+ Добавить кнопку</button>
+          </div>
+        </div>
+
+        <!-- Blocks Tab -->
+        <div class="tab-panel" id="panel-blocks">
+          <div class="blocks-section">
+            <h3>📦 Дополнительные блоки</h3>
+            <div class="hint">Создавайте дополнительные embed-блоки для расширенной информации.</div>
+            <div id="extraBlocks"></div>
+            <button class="btn btn-primary" onclick="addBlock()">+ Добавить блок</button>
+          </div>
+        </div>
+
+        <!-- Ticket Tab -->
+        <div class="tab-panel" id="panel-ticket">
+          <div class="form-group">
+            <label>Сообщение при создании ORDER тикета</label>
+            <div class="toolbar">
+              <button onclick="wrapText('auto_order_message','**','**')">Жирный</button>
+              <button onclick="wrapText('auto_order_message','*','*')">Курсив</button>
+              <button onclick="insertLink('auto_order_message')">Ссылка</button>
+            </div>
+            <textarea id="auto_order_message">Привет, {user}! 👋
+
+Спасибо за заказ! Пожалуйста, опишите:
+• Что вам нужно
+• Ваш бюджет
+• Сроки выполнения</textarea>
+            <div class="hint">Используйте {user} для упоминания пользователя</div>
+          </div>
+
+          <div class="form-group">
+            <label>Сообщение при создании SUPPORT тикета</label>
+            <div class="toolbar">
+              <button onclick="wrapText('auto_support_message','**','**')">Жирный</button>
+              <button onclick="wrapText('auto_support_message','*','*')">Курсив</button>
+              <button onclick="insertLink('auto_support_message')">Ссылка</button>
+            </div>
+            <textarea id="auto_support_message">Привет, {user}! 🛟
+
+Спасибо за обращение в поддержку!
+Опишите проблему максимально подробно, и мы поможем вам как можно скорее.</textarea>
+            <div class="hint">Используйте {user} для упоминания пользователя</div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button class="btn btn-success" onclick="savePost()">💾 Сохранить</button>
+          <button class="btn btn-primary" onclick="publishPost()">🚀 Опубликовать</button>
+          <button class="btn btn-secondary" onclick="loadPost()">📥 Загрузить</button>
+          <button class="btn btn-secondary" onclick="listPosts()">📋 Список</button>
+        </div>
+
+        <div id="status" class="status-box" style="display: none;"></div>
+      </div>
+
+      <!-- Preview Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2><span class="icon">👁️</span> Предпросмотр</h2>
+        </div>
+
+        <div class="preview-container">
+          <div class="discord-embed" id="preview">
+            <img id="p_img_top" class="embed-image" style="display: none;">
+            <div class="embed-title" id="p_title">Заголовок</div>
+            <div class="embed-description" id="p_desc">Описание</div>
+            <img id="p_img_bottom" class="embed-image" style="display: none;">
+
+            <div class="embed-buttons" id="btns">
+              <button class="discord-button success" id="p_order">🧾 ORDER</button>
+              <button class="discord-button primary" id="p_support">🛟 SUPPORT</button>
+            </div>
+
+            <div id="panelButtonsPreview"></div>
+          </div>
+
+          <div id="previewBlocks"></div>
+
+          <!-- Ticket Preview -->
+          <div style="margin: 16px;">
+            <div class="extra-block">
+              <h4 style="margin-bottom: 8px; color: #43b581;">📋 Превью ORDER тикета:</h4>
+              <div id="p_order_ticket" class="embed-description"></div>
+            </div>
+
+            <div class="extra-block">
+              <h4 style="margin-bottom: 8px; color: #5865f2;">🛟 Превью SUPPORT тикета:</h4>
+              <div id="p_support_ticket" class="embed-description"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fields = ['name', 'channel_id', 'title', 'description', 'color_hex', 'layout_mode', 'image_url', 'image_position',
+      'is_ticket_panel', 'order_label', 'order_emoji', 'order_style', 'support_label', 'support_emoji', 'support_style',
+      'auto_gradient', 'gradient_start_hex', 'gradient_end_hex', 'auto_order_message', 'auto_support_message'];
+
+    let extraBlocks = [];
+    let panelButtons = [];
+
+    function val(id) { return document.getElementById(id).value; }
+    function checked(id) { return document.getElementById(id).checked; }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+      document.getElementById(`panel-${tabName}`).classList.add('active');
+    }
+
+    function wrapText(id, before, after) {
+      const el = document.getElementById(id);
+      const start = el.selectionStart, end = el.selectionEnd;
+      const selected = el.value.substring(start, end);
+      el.value = el.value.substring(0, start) + before + selected + after + el.value.substring(end);
+      el.selectionStart = start + before.length;
+      el.selectionEnd = end + before.length;
+      el.focus();
+      updatePreview();
+    }
+
+    function insertLink(id) {
+      const url = prompt('URL ссылки:', 'https://');
+      const text = prompt('Текст ссылки:', 'ссылка');
+      if (!url || !text) return;
+      const el = document.getElementById(id);
+      const start = el.selectionStart;
+      el.value = el.value.substring(0, start) + `[${text}](${url})` + el.value.substring(start);
+      el.focus();
+      updatePreview();
+    }
+
+    function addPanelButton() {
+      panelButtons.push({
+        label: 'Новая кнопка',
+        emoji: '🔘',
+        style: 'secondary',
+        action: 'none',
+        url: '',
+        row: 0
+      });
+      renderPanelButtons();
+      updatePreview();
+    }
+
+    function removePanelButton(idx) {
+      panelButtons.splice(idx, 1);
+      renderPanelButtons();
+      updatePreview();
+    }
+
+    function renderPanelButtons() {
+      const root = document.getElementById('panelButtons');
+      root.innerHTML = '';
+      panelButtons.forEach((btn, idx) => {
+        const div = document.createElement('div');
+        div.className = 'button-item';
+        div.innerHTML = `
+          <div class="block-header">
+            <span class="block-title">Кнопка ${idx + 1}</span>
+            <button class="btn-remove" onclick="removePanelButton(${idx})">Удалить</button>
+          </div>
+          <div class="row">
+            <div class="form-group">
+              <label>Текст кнопки</label>
+              <input type="text" value="${btn.label}" onchange="panelButtons[${idx}].label = this.value; updatePreview()">
+            </div>
+            <div class="form-group">
+              <label>Emoji</label>
+              <input type="text" value="${btn.emoji}" onchange="panelButtons[${idx}].emoji = this.value; updatePreview()">
+            </div>
+          </div>
+          <div class="row">
+            <div class="form-group">
+              <label>Стиль</label>
+              <select onchange="panelButtons[${idx}].style = this.value; updatePreview()">
+                <option value="primary" ${btn.style === 'primary' ? 'selected' : ''}>Primary (Синяя)</option>
+                <option value="success" ${btn.style === 'success' ? 'selected' : ''}>Success (Зелёная)</option>
+                <option value="secondary" ${btn.style === 'secondary' ? 'selected' : ''}>Secondary (Серая)</option>
+                <option value="danger" ${btn.style === 'danger' ? 'selected' : ''}>Danger (Красная)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Действие</label>
+              <select onchange="panelButtons[${idx}].action = this.value; renderPanelButtons(); updatePreview()">
+                <option value="none" ${btn.action === 'none' ? 'selected' : ''}>Нет действия</option>
+                <option value="order" ${btn.action === 'order' ? 'selected' : ''}>ORDER тикет</option>
+                <option value="support" ${btn.action === 'support' ? 'selected' : ''}>SUPPORT тикет</option>
+                <option value="url" ${btn.action === 'url' ? 'selected' : ''}>URL ссылка</option>
+              </select>
+            </div>
+          </div>
+          ${btn.action === 'url' ? `
+            <div class="form-group">
+              <label>URL</label>
+              <input type="text" value="${btn.url || ''}" placeholder="https://example.com" onchange="panelButtons[${idx}].url = this.value; updatePreview()">
+            </div>
+          ` : ''}
+          <div class="form-group">
+            <label>Ряд (0-4)</label>
+            <input type="number" min="0" max="4" value="${btn.row}" onchange="panelButtons[${idx}].row = parseInt(this.value); updatePreview()">
+            <div class="hint">Кнопки с одинаковым номером ряда будут в одной строке</div>
+          </div>
+        `;
+        root.appendChild(div);
+      });
+    }
+
+    function addBlock() {
+      extraBlocks.push({
+        title: 'Дополнительный блок',
+        description: 'Описание блока...',
+        color_hex: '2ECC71',
+        image_url: '',
+        image_position: 'bottom'
+      });
+      renderBlocks();
+      updatePreview();
+    }
+
+    function removeBlock(idx) {
+      extraBlocks.splice(idx, 1);
+      renderBlocks();
+      updatePreview();
+    }
+
+    function renderBlocks() {
+      const root = document.getElementById('extraBlocks');
+      root.innerHTML = '';
+      extraBlocks.forEach((block, idx) => {
+        const div = document.createElement('div');
+        div.className = 'block-item';
+        div.innerHTML = `
+          <div class="block-header">
+            <span class="block-title">Блок ${idx + 1}</span>
+            <button class="btn-remove" onclick="removeBlock(${idx})">Удалить</button>
+          </div>
+          <div class="form-group">
+            <label>Заголовок блока</label>
+            <input type="text" value="${block.title}" onchange="extraBlocks[${idx}].title = this.value; updatePreview()">
+          </div>
+          <div class="form-group">
+            <label>Описание блока</label>
+            <textarea onchange="extraBlocks[${idx}].description = this.value; updatePreview()">${block.description}</textarea>
+          </div>
+          <div class="row">
+            <div class="form-group">
+              <label>Цвет линии (HEX)</label>
+              <input type="text" value="${block.color_hex}" onchange="extraBlocks[${idx}].color_hex = this.value; updatePreview()">
+            </div>
+            <div class="form-group">
+              <label>Позиция изображения</label>
+              <select onchange="extraBlocks[${idx}].image_position = this.value; updatePreview()">
+                <option value="bottom" ${block.image_position === 'bottom' ? 'selected' : ''}>Снизу</option>
+                <option value="top" ${block.image_position === 'top' ? 'selected' : ''}>Сверху</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>URL изображения</label>
+            <input type="text" value="${block.image_url || ''}" placeholder="https://example.com/image.png" onchange="extraBlocks[${idx}].image_url = this.value; updatePreview()">
+          </div>
+        `;
+        root.appendChild(div);
+      });
+    }
+
+    function payload() {
+      return {
+        name: val('name').trim().toLowerCase(),
+        channel_id: parseInt(val('channel_id')) || 0,
+        title: val('title'),
+        description: val('description'),
+        color_hex: val('color_hex'),
+        layout_mode: val('layout_mode'),
+        image_url: val('image_url').trim() || null,
+        image_position: val('image_position'),
+        is_ticket_panel: checked('is_ticket_panel'),
+        order_label: val('order_label'),
+        order_emoji: val('order_emoji'),
+        order_style: val('order_style'),
+        support_label: val('support_label'),
+        support_emoji: val('support_emoji'),
+        support_style: val('support_style'),
+        auto_gradient: checked('auto_gradient'),
+        gradient_start_hex: val('gradient_start_hex'),
+        gradient_end_hex: val('gradient_end_hex'),
+        auto_order_message: val('auto_order_message'),
+        auto_support_message: val('auto_support_message'),
+        panel_buttons: panelButtons,
+        extra_blocks: extraBlocks
+      };
+    }
+
+    function markdownPreview(text) {
+      return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/__(.+?)__/g, '<u>$1</u>')
+        .replace(/~~(.+?)~~/g, '<s>$1</s>')
+        .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" style="color: #00b0f4;">$1</a>')
+        .replace(/^> (.+)/gm, '<span style="border-left: 3px solid #4f545c; padding-left: 8px; color: #b9bbbe;">$1</span>');
+    }
+
+    function styleColor(style) {
+      const colors = {
+        primary: '#5865f2',
+        success: '#43b581',
+        secondary: '#4f545c',
+        danger: '#f04747'
+      };
+      return colors[style] || colors.secondary;
+    }
+
+    function updatePreview() {
+      const p = payload();
+      
+      document.getElementById('p_title').textContent = p.title || '(без заголовка)';
+      document.getElementById('p_desc').innerHTML = markdownPreview(p.description || '(без текста)');
+
+      const preview = document.getElementById('preview');
+      
+      if (p.layout_mode === 'container' || p.layout_mode === 'window') {
+        preview.classList.add('container-mode');
+        preview.style.borderLeft = 'none';
+      } else {
+        preview.classList.remove('container-mode');
+        if (p.auto_gradient) {
+          preview.style.borderLeft = `4px solid #${p.gradient_start_hex}`;
+          preview.style.borderImage = `linear-gradient(180deg, #${p.gradient_start_hex}, #${p.gradient_end_hex}) 1`;
+        } else {
+          preview.style.borderLeft = `4px solid #${p.color_hex}`;
+          preview.style.borderImage = 'none';
+        }
+      }
+
+      const topImg = document.getElementById('p_img_top');
+      const botImg = document.getElementById('p_img_bottom');
+      topImg.style.display = 'none';
+      botImg.style.display = 'none';
+      if (p.image_url) {
+        if (p.image_position === 'top') {
+          topImg.src = p.image_url;
+          topImg.style.display = 'block';
+        } else {
+          botImg.src = p.image_url;
+          botImg.style.display = 'block';
+        }
+      }
+
+      const btnsDiv = document.getElementById('btns');
+      btnsDiv.style.display = p.is_ticket_panel && panelButtons.length === 0 ? 'flex' : 'none';
+
+      const orderBtn = document.getElementById('p_order');
+      const supportBtn = document.getElementById('p_support');
+      orderBtn.textContent = `${p.order_emoji} ${p.order_label}`;
+      supportBtn.textContent = `${p.support_emoji} ${p.support_label}`;
+      
+      if (p.auto_gradient) {
+        orderBtn.style.background = `linear-gradient(135deg, #${p.gradient_start_hex}, #${p.gradient_end_hex})`;
+        supportBtn.style.background = `linear-gradient(135deg, #${p.gradient_end_hex}, #${p.gradient_start_hex})`;
+      } else {
+        orderBtn.style.background = styleColor(p.order_style);
+        supportBtn.style.background = styleColor(p.support_style);
+      }
+
+      // Panel Buttons Preview
+      const panelBtnsRoot = document.getElementById('panelButtonsPreview');
+      panelBtnsRoot.innerHTML = '';
+      
+      if (panelButtons.length > 0) {
+        const byRow = {};
+        panelButtons.forEach(btn => {
+          const row = Math.max(0, Math.min(4, btn.row));
+          if (!byRow[row]) byRow[row] = [];
+          byRow[row].push(btn);
+        });
+
+        Object.keys(byRow).sort((a, b) => +a - +b).forEach(rowNum => {
+          const rowDiv = document.createElement('div');
+          rowDiv.className = 'button-row';
+          byRow[rowNum].forEach(btn => {
+            const btnEl = document.createElement('button');
+            btnEl.className = `discord-button ${btn.style}`;
+            btnEl.textContent = `${btn.emoji} ${btn.label}`;
+            btnEl.style.background = styleColor(btn.style);
+            rowDiv.appendChild(btnEl);
+          });
+          panelBtnsRoot.appendChild(rowDiv);
+        });
+      }
+
+      // Extra Blocks Preview
+      const blocksRoot = document.getElementById('previewBlocks');
+      blocksRoot.innerHTML = '';
+
+      if (p.layout_mode === 'container' && extraBlocks.length > 0) {
+        const container = document.createElement('div');
+        container.className = 'discord-embed container-mode';
+        container.style.marginTop = '16px';
+        
+        extraBlocks.forEach((block, idx) => {
+          const blockDiv = document.createElement('div');
+          blockDiv.className = 'extra-block container-style';
+          
+          const headerDiv = document.createElement('div');
+          headerDiv.className = 'extra-block-header';
+          
+          const contentDiv = document.createElement('div');
+          contentDiv.className = 'extra-block-content';
+          contentDiv.innerHTML = `
+            <div class="extra-block-title">${block.title || 'Блок'}</div>
+            <div class="embed-description">${markdownPreview(block.description || '')}</div>
+          `;
+          
+          headerDiv.appendChild(contentDiv);
+          
+          if (panelButtons[idx]) {
+            const btn = panelButtons[idx];
+            const btnEl = document.createElement('button');
+            btnEl.className = `discord-button ${btn.style}`;
+            btnEl.textContent = `${btn.emoji} ${btn.label}`;
+            btnEl.style.background = styleColor(btn.style);
+            btnEl.style.whiteSpace = 'nowrap';
+            headerDiv.appendChild(btnEl);
+          }
+          
+          blockDiv.appendChild(headerDiv);
+          container.appendChild(blockDiv);
+        });
+        
+        blocksRoot.appendChild(container);
+      } else if (p.layout_mode === 'window' && extraBlocks.length > 0) {
+        extraBlocks.forEach((block, idx) => {
+          const blockDiv = document.createElement('div');
+          blockDiv.className = 'extra-block';
+          blockDiv.style.margin = '16px';
+          
+          const headerDiv = document.createElement('div');
+          headerDiv.className = 'extra-block-header';
+          
+          const contentDiv = document.createElement('div');
+          contentDiv.className = 'extra-block-content';
+          contentDiv.innerHTML = `
+            <div class="extra-block-title">${block.title || 'Блок'}</div>
+            <div class="embed-description">${markdownPreview(block.description || '')}</div>
+          `;
+          
+          headerDiv.appendChild(contentDiv);
+          
+          if (panelButtons[idx]) {
+            const btn = panelButtons[idx];
+            const btnEl = document.createElement('button');
+            btnEl.className = `discord-button ${btn.style}`;
+            btnEl.textContent = `${btn.emoji} ${btn.label}`;
+            btnEl.style.background = styleColor(btn.style);
+            btnEl.style.whiteSpace = 'nowrap';
+            headerDiv.appendChild(btnEl);
+          }
+          
+          blockDiv.appendChild(headerDiv);
+          blocksRoot.appendChild(blockDiv);
+        });
+      } else {
+        extraBlocks.forEach(block => {
+          const blockDiv = document.createElement('div');
+          blockDiv.className = 'discord-embed';
+          blockDiv.style.margin = '16px';
+          blockDiv.style.borderLeft = `4px solid #${block.color_hex}`;
+          
+          blockDiv.innerHTML = `
+            ${block.image_url && block.image_position === 'top' ? `<img class="embed-image" src="${block.image_url}">` : ''}
+            <div class="embed-title" style="font-size: 1.2rem;">${block.title || 'Блок'}</div>
+            <div class="embed-description">${markdownPreview(block.description || '')}</div>
+            ${block.image_url && block.image_position !== 'top' ? `<img class="embed-image" src="${block.image_url}">` : ''}
+          `;
+          
+          blocksRoot.appendChild(blockDiv);
+        });
+      }
+
+      // Ticket Previews
+      document.getElementById('p_order_ticket').innerHTML = markdownPreview((p.auto_order_message || '').replace('{user}', '@User'));
+      document.getElementById('p_support_ticket').innerHTML = markdownPreview((p.auto_support_message || '').replace('{user}', '@User'));
+    }
+
+    async function savePost() {
+      const p = payload();
+      if (!p.name || !p.channel_id) {
+        setStatus('❌ Укажите имя шаблона и Channel ID');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/posts/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(p)
+        });
+        const data = await res.json();
+        setStatus('✅ Сохранено:\n' + JSON.stringify(data, null, 2));
+        await refreshTemplateSelect();
+      } catch (err) {
+        setStatus('❌ Ошибка: ' + err.message);
+      }
+    }
+
+    async function publishPost() {
+      const p = payload();
+      if (!p.name) {
+        setStatus('❌ Укажите имя шаблона');
+        return;
+      }
+      
+      await savePost();
+      
+      try {
+        const res = await fetch(`/api/posts/${encodeURIComponent(p.name)}/publish`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        setStatus('🚀 Опубликовано:\n' + JSON.stringify(data, null, 2));
+      } catch (err) {
+        setStatus('❌ Ошибка публикации: ' + err.message);
+      }
+    }
+
+    async function loadPost() {
+      const name = val('name').trim().toLowerCase();
+      if (!name) {
+        setStatus('❌ Укажите имя шаблона');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/posts/${encodeURIComponent(name)}`);
+        const data = await res.json();
+        
+        if (data.error) {
+          setStatus('❌ Ошибка: ' + data.error);
+          return;
+        }
+        
+        fields.forEach(field => {
+          const el = document.getElementById(field);
+          if (!el) return;
+          if (el.type === 'checkbox') {
+            el.checked = !!data[field];
+          } else {
+            el.value = data[field] ?? '';
+          }
+        });
+        
+        extraBlocks = data.extra_blocks || [];
+        panelButtons = data.panel_buttons || [];
+        
+        renderBlocks();
+        renderPanelButtons();
+        updatePreview();
+        
+        setStatus('✅ Загружено: ' + name);
+      } catch (err) {
+        setStatus('❌ Ошибка загрузки: ' + err.message);
+      }
+    }
+
+    async function listPosts() {
+      try {
+        const res = await fetch('/api/posts');
+        const data = await res.json();
+        setStatus('📋 Список шаблонов:\n' + JSON.stringify(data, null, 2));
+        await refreshTemplateSelect();
+      } catch (err) {
+        setStatus('❌ Ошибка: ' + err.message);
+      }
+    }
+
+    async function refreshTemplateSelect() {
+      try {
+        const res = await fetch('/api/posts');
+        const data = await res.json();
+        const select = document.getElementById('template_select');
+        select.innerHTML = '<option value="">-- Выберите шаблон --</option>';
+        data.forEach(post => {
+          const option = document.createElement('option');
+          option.value = post.name;
+          option.textContent = `${post.name} (${post.title})`;
+          select.appendChild(option);
+        });
+      } catch (err) {
+        console.error('Ошибка загрузки списка:', err);
+      }
+    }
+
+    async function loadSelectedTemplate() {
+      const select = document.getElementById('template_select');
+      const name = select.value;
+      if (!name) return;
+      
+      document.getElementById('name').value = name;
+      await loadPost();
+    }
+
+    function setStatus(text) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = text;
+      statusEl.style.display = 'block';
+    }
+
+    // Auto-update preview on input
+    document.querySelectorAll('input, textarea, select').forEach(el => {
+      el.addEventListener('input', updatePreview);
+      el.addEventListener('change', updatePreview);
+    });
+
+    // Initialize
+    renderBlocks();
+    renderPanelButtons();
+    updatePreview();
+    refreshTemplateSelect();
+  </script>
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advanced Discord Editor</title>
+  <style>
+    body{font-family:Inter,Arial,sans-serif;background:#0e1117;color:#fff;margin:0}
+    .wrap{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;padding:16px}
+    .card{background:#171b24;border-radius:12px;padding:14px}
+    label{display:block;margin:8px 0 6px;color:#c7d0dc;font-size:13px}
+    input,textarea,select{width:100%;padding:9px;border:1px solid #2f3744;border-radius:8px;background:#0d121a;color:#fff}
+    textarea{min-height:90px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .toolbar{display:flex;gap:6px;flex-wrap:wrap}
+    button{border:none;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer}
+    .toolbar button{background:#2f3744;color:#fff}
+    .act{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .save{background:#2ecc71}.pub{background:#5865f2;color:#fff}.dark{background:#2f3744;color:#fff}
+    .preview{background:#2b2d31;border-left:4px solid #2ecc71;border-radius:8px;padding:12px}
+    .title{font-size:27px;font-weight:800;margin:0 0 8px}
+    .desc{white-space:pre-wrap;line-height:1.4}
+    .img{max-width:100%;border-radius:10px;margin-top:10px}
+    .btns{display:flex;gap:8px;margin-top:10px}
+    .btn{padding:8px 12px;border-radius:8px;font-weight:700;color:#fff;background:#3f4655}
+    .blocks{margin-top:12px;border-top:1px solid #2f3744;padding-top:10px}
+    .block{border:1px solid #2f3744;border-radius:10px;padding:8px;margin-bottom:8px}
+    .status{margin-top:10px;color:#9ad0ff;white-space:pre-wrap}
+    .tabs{display:flex;gap:8px;margin-bottom:10px}
+    .tab{background:#2f3744;color:#fff}
+    .tab.active{background:#5865f2}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .ticket-preview{margin-top:12px;padding:10px;background:#222834;border-radius:8px;border:1px solid #2f3744}
+    .ticket-preview h4{margin:0 0 8px}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .btn-chip{padding:8px 12px;border-radius:8px;font-weight:700;color:#fff;background:#4f545c}
+    @media (max-width: 1000px){.wrap{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Редактор постов</h2>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="post" onclick="switchTab('post')">Пост</button>
+      <button class="tab" data-tab="ticket" onclick="switchTab('ticket')">ORDER/SUPPORT ticket</button>
+    </div>
+
+    <div class="tab-panel active" id="panel-post">
+      <label>Имя шаблона</label><input id="name" value="ticket">
+      <div class="row">
+        <div><label>Выбрать сохраненный</label><select id="template_select"><option value="">--</option></select></div>
+        <div style="display:flex;align-items:flex-end"><button class="dark" onclick="loadSelectedTemplate()">Загрузить выбранный</button></div>
+      </div>
+
+      <div class="row">
+        <div><label>Channel ID</label><input id="channel_id" placeholder="123..."></div>
+        <div><label>Цвет линии</label><input id="color_hex" value="2ECC71"></div>
+      </div>
+      <div class="row">
+        <div><label>Режим отображения</label><select id="layout_mode"><option value="sidebar">Боковая панель (как сейчас)</option><option value="window">Окно (один большой блок с секциями)</option><option value="container">Большие контейнеры (как в примере)</option></select></div>
+        <div></div>
+      </div>
+      <label>Заголовок</label><input id="title" value="CapybarBuild">
+
+      <label>Описание</label>
+      <div class="toolbar">
+        <button onclick="wrapText('description','**','**')">B</button>
+        <button onclick="wrapText('description','*','*')">I</button>
+        <button onclick="wrapText('description','__','__')">U</button>
+        <button onclick="wrapText('description','~~','~~')">S</button>
+        <button onclick="wrapText('description','```\n','\n```')">Code</button>
+        <button onclick="wrapText('description','> ','')">Quote</button>
+        <button onclick="insertLink('description')">Link</button>
+        <button onclick="insertButtonTag('description')">BtnTag</button>
+      </div>
+      <textarea id="description">🎁: We work with projects of any complexity and are ready to create something amazing for you</textarea>
+      <small style="color:#9aa7b8">Тег кнопки: <code>{{btn:Текст|order|success|inline|🛒}}</code>, <code>{{btn:Get Support|support|secondary|row1}}</code> или <code>{{btn:Verify|url|secondary|bottom||https://site.com}}</code>.</small>
+      <small style="color:#ffb86b">Важно: Discord-кнопки нельзя встроить внутрь текста embed — они всегда отображаются отдельным блоком под постом.</small>
+
+      <div class="row">
+        <div><label>Image URL</label><input id="image_url" placeholder="https://..."></div>
+        <div><label>Позиция image</label><select id="image_position"><option value="bottom">bottom</option><option value="top">top</option></select></div>
+      </div>
+
+      <label><input type="checkbox" id="auto_gradient"> Авто-градиент</label>
+      <div class="row">
+        <div><label>Gradient start</label><input id="gradient_start_hex" value="2ECC71"></div>
+        <div><label>Gradient end</label><input id="gradient_end_hex" value="5865F2"></div>
+      </div>
+
+      <label><input type="checkbox" id="is_ticket_panel" checked> ticket panel</label>
+      <div class="row">
+        <div><label>ORDER text</label><input id="order_label" value="ORDER"></div>
+        <div><label>ORDER emoji</label><input id="order_emoji" value="🧾" placeholder="можно оставить пустым"></div>
+      </div>
+      <div class="row">
+        <div><label>ORDER color</label><select id="order_style"><option>success</option><option>primary</option><option>secondary</option><option>danger</option></select></div>
+        <div><label>SUPPORT color</label><select id="support_style"><option>primary</option><option>success</option><option>secondary</option><option>danger</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>SUPPORT text</label><input id="support_label" value="SUPPORT"></div>
+        <div><label>SUPPORT emoji</label><input id="support_emoji" value="🛟" placeholder="можно оставить пустым"></div>
+      </div>
+
+      <div class="blocks">
+        <h3>Кнопки панели (свободно по рядам)</h3>
+        <div id="panelButtons"></div>
+        <button class="dark" onclick="addPanelButton()">+ Добавить кнопку</button>
+      </div>
+
+      <div class="blocks">
+        <h3>Дополнительные блоки (+)</h3>
+        <div id="extraBlocks"></div>
+        <button class="dark" onclick="addBlock()">+ Добавить блок</button>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="panel-ticket">
+      <label>ORDER ticket сообщение (используй {user} для упоминания)</label>
+      <div class="toolbar">
+        <button onclick="wrapText('auto_order_message','**','**')">B</button>
+        <button onclick="wrapText('auto_order_message','*','*')">I</button>
+        <button onclick="insertLink('auto_order_message')">Link</button>
+      </div>
+      <textarea id="auto_order_message">Привет, {user}! Спасибо за заказ! Опишите задачу и бюджет.</textarea>
+
+      <label>SUPPORT ticket сообщение (используй {user} для упоминания)</label>
+      <div class="toolbar">
+        <button onclick="wrapText('auto_support_message','**','**')">B</button>
+        <button onclick="wrapText('auto_support_message','*','*')">I</button>
+        <button onclick="insertLink('auto_support_message')">Link</button>
+      </div>
+      <textarea id="auto_support_message">Привет, {user}! Спасибо за обращение в саппорт! Опишите проблему подробно.</textarea>
+    </div>
+
+    <div class="act">
+      <button class="save" onclick="savePost()">Сохранить</button>
+      <button class="pub" onclick="publishPost()">Опубликовать</button>
+      <button class="dark" onclick="loadPost()">Загрузить</button>
+      <button class="dark" onclick="listPosts()">Список</button>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>Live preview</h2>
+    <div id="preview" class="preview">
+      <div class="title" id="p_title"></div>
+      <img id="p_img_top" class="img" style="display:none"/>
+      <div class="desc" id="p_desc"></div>
+      <img id="p_img_bottom" class="img" style="display:none"/>
+    </div>
+    <div id="btns" class="btns" style="display:none">
+      <div id="p_order" class="btn">🧾 ORDER</div>
+      <div id="p_support" class="btn">🛟 SUPPORT</div>
+    </div>
+    <div id="panelButtonsPreview"></div>
+    <div id="previewBlocks"></div>
+
+    <div class="ticket-preview">
+      <h4>ORDER ticket preview</h4>
+      <div id="p_order_ticket"></div>
+      <h4>SUPPORT ticket preview</h4>
+      <div id="p_support_ticket"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const fields=["name","channel_id","title","description","color_hex","layout_mode","image_url","image_position","auto_gradient","gradient_start_hex","gradient_end_hex","is_ticket_panel","order_label","order_emoji","order_style","support_label","support_emoji","support_style","auto_order_message","auto_support_message"];
+fields.forEach(id=>{const el=document.getElementById(id); el.addEventListener('input', updatePreview); el.addEventListener('change', updatePreview);});
+
+let extraBlocks=[];
+let panelButtons=[];
+
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.getElementById('panel-post').classList.toggle('active', name==='post');
+  document.getElementById('panel-ticket').classList.toggle('active', name==='ticket');
+}
+
+function val(id){return document.getElementById(id).value}
+function chk(id){return document.getElementById(id).checked}
+
+function styleColor(style){if(style==='success')return '#2ecc71'; if(style==='primary')return '#5865f2'; if(style==='danger')return '#ed4245'; return '#4f545c';}
+function extractButtonsFromTags(text){
+  const out=[];
+  const cleaned=(text||'').replace(/\{\{btn:([^{}]+)\}\}/g,(_,raw)=>{
+    const p=String(raw||'').split('|').map(v=>v.trim());
+    const label=p[0]||'Button';
+    const action=(p[1]||'none').toLowerCase();
+    const style=(p[2]||'secondary').toLowerCase();
+    const pos=(p[3]||'inline').toLowerCase();
+    const emoji=p[4]||'';
+    const extra=p[5]||'';
+    const row = pos==='bottom' ? 4 : (pos.startsWith('row') ? Math.max(0,Math.min(4,parseInt(pos.slice(3),10)||0)) : 0);
+    const mappedAction = action==='link' ? 'url' : action;
+    if(['order','support','url'].includes(mappedAction)){
+      out.push({label,emoji,style,action:mappedAction,url:mappedAction==='url'?extra:'',row});
+    }
+    return `${emoji?emoji+' ':''}${label}`;
+  });
+  return {cleaned,buttons:out};
+}
+
+function markdownPreview(x){
+  return (x||'')
+    .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')
+    .replace(/\*(.*?)\*/g,'<i>$1</i>')
+    .replace(/__(.*?)__/g,'<u>$1</u>')
+    .replace(/~~(.*?)~~/g,'<s>$1</s>')
+    .replace(/\n/g,'<br>')
+}
+
+
+function payload(){
+  return {
+    name: val('name').trim().toLowerCase(), channel_id: val('channel_id').trim(), title: val('title'), description: val('description'),
+    color_hex: val('color_hex').replace('#',''), layout_mode: val('layout_mode'), image_url: val('image_url').trim(), image_position: val('image_position'),
+    auto_gradient: chk('auto_gradient'), gradient_start_hex: val('gradient_start_hex').replace('#',''), gradient_end_hex: val('gradient_end_hex').replace('#',''),
+    is_ticket_panel: chk('is_ticket_panel'), order_label: val('order_label'), order_emoji: val('order_emoji').trim(), order_style: val('order_style'),
+    support_label: val('support_label'), support_emoji: val('support_emoji').trim(), support_style: val('support_style'),
+    auto_order_message: val('auto_order_message'), auto_support_message: val('auto_support_message'), panel_buttons: panelButtons, extra_blocks: extraBlocks
+  };
+}
+
+async function refreshTemplateSelect(){
+  const sel=document.getElementById('template_select');
+  const r=await fetch('/api/posts');
+  const list=await r.json();
+  const names=list.map(x=>x.name).filter(Boolean).sort();
+  sel.innerHTML='<option value="">--</option>'+names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+}
+
+function loadSelectedTemplate(){
+  const sel=document.getElementById('template_select');
+  if(!sel.value) return setStatus('Выбери шаблон');
+  document.getElementById('name').value=sel.value;
+  loadPost();
+}
+
+function wrapText(id,l,r){
+  const t=document.getElementById(id); const s=t.selectionStart,e=t.selectionEnd;
+  t.value=t.value.slice(0,s)+l+t.value.slice(s,e)+r+t.value.slice(e);
+  updatePreview();
+}
+
+function insertLink(id){
+  const t=document.getElementById(id);
+  const s=t.selectionStart,e=t.selectionEnd;
+  const selected=t.value.slice(s,e) || 'ссылка';
+  const url=prompt('Вставь URL (https://...)');
+  if(!url) return;
+  const link=`[${selected}](${url})`;
+  t.value=t.value.slice(0,s)+link+t.value.slice(e);
+  updatePreview();
+}
+
+function insertButtonTag(id){
+  const t=document.getElementById(id);
+  const label=prompt('Текст кнопки', 'Start My Project') || 'Button';
+  const action=(prompt('Действие: order | support | url', 'order') || 'order').trim();
+  const style=(prompt('Стиль: primary | success | secondary | danger', 'success') || 'secondary').trim();
+  const pos=(prompt('Позиция: inline | bottom | row0..row4', 'inline') || 'inline').trim();
+  const emoji=(prompt('Emoji (можно пусто)', '') || '').trim();
+  let extra='';
+  if(action==='url') extra=(prompt('URL для кнопки', 'https://example.com') || '').trim();
+  const tag=`{{btn:${label}|${action}|${style}|${pos}|${emoji}|${extra}}}`;
+  const s=t.selectionStart,e=t.selectionEnd;
+  t.value=t.value.slice(0,s)+tag+t.value.slice(e);
+  updatePreview();
+}
+
+function addPanelButton(btn){
+  panelButtons.push(btn||{label:'Новая кнопка',emoji:'',style:'secondary',action:'none',url:'',row:0});
+  renderPanelButtons(); updatePreview();
+}
+function removePanelButton(i){panelButtons.splice(i,1); renderPanelButtons(); updatePreview();}
+function renderPanelButtons(){
+  const root=document.getElementById('panelButtons'); root.innerHTML='';
+  panelButtons.forEach((b,i)=>{
+    const el=document.createElement('div'); el.className='block';
+    el.innerHTML=`
+      <div class="row"><div><label>Текст</label><input data-i="${i}" data-k="label" value="${escapeHtml(b.label||'')}"></div><div><label>Emoji</label><input data-i="${i}" data-k="emoji" value="${escapeHtml(b.emoji||'')}"></div></div>
+      <div class="row"><div><label>Style</label><select data-i="${i}" data-k="style"><option value="primary" ${b.style==='primary'?'selected':''}>primary</option><option value="success" ${b.style==='success'?'selected':''}>success</option><option value="secondary" ${!b.style||b.style==='secondary'?'selected':''}>secondary</option><option value="danger" ${b.style==='danger'?'selected':''}>danger</option></select></div><div><label>Action</label><select data-i="${i}" data-k="action"><option value="none" ${!b.action||b.action==='none'?'selected':''}>none</option><option value="order" ${b.action==='order'?'selected':''}>open ORDER</option><option value="support" ${b.action==='support'?'selected':''}>open SUPPORT</option><option value="url" ${b.action==='url'?'selected':''}>open URL</option></select></div></div>
+      <div class="row"><div><label>URL (для action=url)</label><input data-i="${i}" data-k="url" value="${escapeHtml(b.url||'')}"></div><div><label>Row (0-4)</label><input type="number" min="0" max="4" data-i="${i}" data-k="row" value="${Number.isFinite(+b.row)?+b.row:0}"></div></div>
+      <button class="dark" onclick="removePanelButton(${i})">Удалить кнопку</button>
+    `;
+    root.appendChild(el);
+  });
+  root.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',e=>{
+    const i=+e.target.dataset.i; const k=e.target.dataset.k;
+    panelButtons[i][k] = k==='row' ? parseInt(e.target.value||'0',10) : e.target.value;
+    updatePreview();
+  }));
+}
+
+function addBlock(block){
+  extraBlocks.push(block||{title:'',description:'',color_hex:'2ECC71',image_url:'',image_position:'bottom'});
+  renderBlocks(); updatePreview();
+}
+function removeBlock(i){extraBlocks.splice(i,1); renderBlocks(); updatePreview();}
+function renderBlocks(){
+  const root=document.getElementById('extraBlocks'); root.innerHTML='';
+  extraBlocks.forEach((b,i)=>{
+    const el=document.createElement('div'); el.className='block';
+    el.innerHTML=`
+      <div class="row"><div><label>Title</label><input data-i="${i}" data-k="title" value="${escapeHtml(b.title)}"></div><div><label>Color</label><input data-i="${i}" data-k="color_hex" value="${escapeHtml(b.color_hex)}"></div></div>
+      <label>Description</label><textarea data-i="${i}" data-k="description">${escapeHtml(b.description)}</textarea>
+      <div class="row"><div><label>Image URL</label><input data-i="${i}" data-k="image_url" value="${escapeHtml(b.image_url||'')}"></div><div><label>Image position</label><select data-i="${i}" data-k="image_position"><option value="bottom" ${b.image_position==='bottom'?'selected':''}>bottom</option><option value="top" ${b.image_position==='top'?'selected':''}>top</option></select></div></div>
+      <button class="dark" onclick="removeBlock(${i})">Удалить</button>
+    `;
+    root.appendChild(el);
+  });
+  root.querySelectorAll('input,textarea,select').forEach(el=>el.addEventListener('input',e=>{const i=+e.target.dataset.i; const k=e.target.dataset.k; extraBlocks[i][k]=e.target.value; updatePreview();}));
+}
+function escapeHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function normalizeRuntimeButtons(p, fromTags){
+  const runtime=[...(Array.isArray(p.panel_buttons)?p.panel_buttons:[]), ...fromTags.buttons];
+  if((p.layout_mode==='window' || p.layout_mode==='container') && runtime.length){
+    const hasExplicitRows = runtime.some(b => (parseInt(b.row||0,10)||0) !== 0);
+    if(!hasExplicitRows){
+      runtime.forEach((b,i)=>{ b.row=Math.max(0,Math.min(4,i)); });
+    }
+  }
+  return runtime;
+}
+
+function updatePreview(){
+  const p=payload();
+  document.getElementById('p_title').textContent=p.title||'(без заголовка)';
+  const fromTags=extractButtonsFromTags(p.description||'');
+  document.getElementById('p_desc').innerHTML=markdownPreview(fromTags.cleaned||'(без текста)');
+
+  const pr=document.getElementById('preview');
+  if(p.layout_mode==='window' || p.layout_mode==='container'){
+    pr.style.borderImage='none';
+    pr.style.borderLeftStyle='none';
+    pr.style.borderLeftWidth='0';
+    pr.style.border='1px solid #3a404f';
+  } else if(p.auto_gradient){
+    pr.style.border='none';
+    pr.style.borderImage=`linear-gradient(180deg,#${p.gradient_start_hex},#${p.gradient_end_hex}) 1`;
+    pr.style.borderLeftWidth='4px';
+    pr.style.borderLeftStyle='solid';
+  }
+  else {
+    pr.style.border='none';
+    pr.style.borderImage='none';
+    pr.style.borderLeftColor='#'+(p.color_hex||'2ECC71');
+    pr.style.borderLeftWidth='4px';
+    pr.style.borderLeftStyle='solid';
+  }
+
+  const top=document.getElementById('p_img_top'), bot=document.getElementById('p_img_bottom');
+  top.style.display='none'; bot.style.display='none';
+  if(p.image_url){ if(p.image_position==='top'){top.src=p.image_url; top.style.display='block';} else {bot.src=p.image_url; bot.style.display='block';}}
+
+  const btns=document.getElementById('btns');
+  const customBtnsRoot=document.getElementById('panelButtonsPreview');
+  btns.style.display=p.is_ticket_panel?'flex':'none';
+  customBtnsRoot.innerHTML='';
+  const o=document.getElementById('p_order'), s=document.getElementById('p_support');
+  o.textContent=`${p.order_emoji ? p.order_emoji+' ' : ''}${p.order_label}`;
+  s.textContent=`${p.support_emoji ? p.support_emoji+' ' : ''}${p.support_label}`;
+  if(p.auto_gradient){o.style.background=`linear-gradient(135deg,#${p.gradient_start_hex},#${p.gradient_end_hex})`; s.style.background=`linear-gradient(135deg,#${p.gradient_end_hex},#${p.gradient_start_hex})`}
+  else {o.style.background=styleColor(p.order_style); s.style.background=styleColor(p.support_style)}
+
+  const runtimeButtons=normalizeRuntimeButtons(p, fromTags);
+  if(runtimeButtons.length){
+    btns.style.display='none';
+    const byRow={};
+    runtimeButtons.forEach(b=>{const r=Math.max(0,Math.min(4,parseInt(b.row||0,10)||0)); (byRow[r]||(byRow[r]=[])).push(b);});
+    Object.keys(byRow).sort((a,b)=>+a-+b).forEach(r=>{
+      const row=document.createElement('div'); row.className='btn-row';
+      byRow[r].forEach(b=>{
+        const chip=document.createElement('div'); chip.className='btn-chip';
+        chip.style.background=b.action==='url' ? '#4f545c' : styleColor(b.style||'secondary');
+        chip.textContent=`${b.emoji?b.emoji+' ':''}${b.label||'Button'}`;
+        row.appendChild(chip);
+      });
+      customBtnsRoot.appendChild(row);
+    });
+  }
+
+  document.getElementById('p_order_ticket').innerHTML = markdownPreview((p.auto_order_message||'').replaceAll('{user}','@Noxi'));
+  document.getElementById('p_support_ticket').innerHTML = markdownPreview((p.auto_support_message||'').replaceAll('{user}','@Noxi'));
+
+  const root=document.getElementById('previewBlocks'); root.innerHTML='';
+  if(p.layout_mode==='container' && p.extra_blocks.length){
+    const outer=document.createElement('div');
+    outer.className='preview';
+    outer.style.marginTop='10px';
+    outer.style.border='1px solid #2f3744';
+    outer.style.borderLeft='none';
+    p.extra_blocks.forEach((b,i)=>{
+      const row=document.createElement('div');
+      row.className='block';
+      row.style.background='transparent';
+      row.style.marginTop = i===0 ? '0' : '8px';
+      row.style.border='none';
+      const btn=runtimeButtons[i];
+      row.innerHTML=`<div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">`
+        +`<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:26px;margin-bottom:4px">${escapeHtml(b.title||'Section')}</div><div class='desc'>${markdownPreview(b.description||'')}</div></div>`
+        +`${btn?`<div class='btn-chip' style='white-space:nowrap;background:${btn.action==='url' ? '#4f545c' : styleColor(btn.style||'secondary')}' >${escapeHtml((btn.emoji?btn.emoji+' ':'')+(btn.label||'Button'))}</div>`:''}`
+        +`</div>`;
+      outer.appendChild(row);
+    });
+    root.appendChild(outer);
+  } else if(p.layout_mode==='window' && p.extra_blocks.length){
+    p.extra_blocks.forEach((b,i)=>{
+      const row=document.createElement('div');
+      row.className='block';
+      row.style.background='#1f2430';
+      row.style.marginTop='8px';
+      row.style.border='1px solid #2f3744';
+      const btn=runtimeButtons[i];
+      row.innerHTML=`<div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start">`
+        +`<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:26px;margin-bottom:4px">${escapeHtml(b.title||'Section')}</div><div class='desc'>${markdownPreview(b.description||'')}</div></div>`
+        +`${btn?`<div class='btn-chip' style='white-space:nowrap;background:${btn.action==='url' ? '#4f545c' : styleColor(btn.style||'secondary')}' >${escapeHtml((btn.emoji?btn.emoji+' ':'')+(btn.label||'Button'))}</div>`:''}`
+        +`</div>`;
+      root.appendChild(row);
+    });
+  } else {
+    p.extra_blocks.forEach(b=>{
+      const div=document.createElement('div'); div.className='preview'; div.style.marginTop='10px'; div.style.borderLeftColor='#'+(b.color_hex||'2ECC71');
+      div.innerHTML=`<div class='title' style='font-size:22px'>${escapeHtml(b.title||'Продолжение')}</div>`+
+        `${b.image_url&&b.image_position==='top'?`<img class='img' src='${escapeHtml(b.image_url)}'>`:''}`+
+        `<div class='desc'>${markdownPreview(b.description||'')}</div>`+
+        `${b.image_url&&b.image_position!=='top'?`<img class='img' src='${escapeHtml(b.image_url)}'>`:''}`;
+      root.appendChild(div);
+    })
+  }
+}
+
+async function savePost(){
+  const p=payload(); if(!p.name||!p.channel_id) return setStatus('Нужны name и channel_id');
+  const r=await fetch('/api/posts/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  const data=await r.json();
+  setStatus(JSON.stringify(data,null,2));
+  await refreshTemplateSelect();
+}
+async function publishPost(){
+  const p=payload(); if(!p.name)return setStatus('Сначала name');
+  await savePost();
+  const r=await fetch(`/api/posts/${encodeURIComponent(p.name)}/publish`,{method:'POST'});
+  const data=await r.json();
+  setStatus(JSON.stringify(data,null,2));
+  await refreshTemplateSelect();
+}
+async function loadPost(){
+  const name=val('name').trim().toLowerCase(); if(!name)return setStatus('Укажи name');
+  const r=await fetch(`/api/posts/${encodeURIComponent(name)}`); const d=await r.json();
+  if(d.error)return setStatus(JSON.stringify(d,null,2));
+  fields.forEach(k=>{const el=document.getElementById(k); if(!el)return; if(el.type==='checkbox')el.checked=!!d[k]; else el.value=d[k]??''});
+  extraBlocks = d.extra_blocks || [];
+  panelButtons = d.panel_buttons || [];
+  renderBlocks();
+  renderPanelButtons();
+  updatePreview(); setStatus('Загружено');
+  await refreshTemplateSelect();
+}
+async function listPosts(){const r=await fetch('/api/posts'); const data=await r.json(); setStatus(JSON.stringify(data,null,2)); await refreshTemplateSelect();}
+function setStatus(x){document.getElementById('status').textContent=x}
+
+renderBlocks(); renderPanelButtons(); updatePreview(); refreshTemplateSelect();
+</script>
+</body>
+</html>

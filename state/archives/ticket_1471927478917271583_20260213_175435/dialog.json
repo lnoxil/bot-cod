@@ -1,0 +1,21 @@
+[
+  {
+    "id": 1471927480616226959,
+    "created_at": "2026-02-13 17:54:18 UTC",
+    "author": {
+      "id": 1090267102910365696,
+      "display_name": "Capybara"
+    },
+    "content": "<@514081567644188672>",
+    "attachments": [],
+    "embeds": [
+      {
+        "flags": 0,
+        "color": 5793266,
+        "type": "rich",
+        "description": "-Welcome! Thanks for reaching out.\nTo get started, please provide the details below — the clearer your request, the better the result.\n\n-Project type:\n(e.g., medieval castle, modern villa, fantasy island, redstone farm)\n\n-Size / area:\n(e.g., 200×200 blocks, full spawn island, 3 buildings on a hill)\n\n-Style & references:\n(e.g., “Hermitcraft S8”, “Japanese minimalism”) — screenshots welcome\n\n-Budget:\nSpecify in USD, RUB, or KZT\n\n-Deadline:\nExact date or “no rush”\n\n-Extras:\nInteriors? Landscaping? Hidden rooms? Specific materials? Lighting?\n\n-Payment methods:\nBank cards from Kazakhstan and Russia, cryptocurrency (USDT, BTC, ETH — confirm before payment)",
+        "title": "ORDER ticket"
+      }
+    ]
+  }
+]

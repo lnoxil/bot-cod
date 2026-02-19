@@ -1,0 +1,21 @@
+[
+  {
+    "id": 1471910474575646760,
+    "created_at": "2026-02-13 16:46:43 UTC",
+    "author": {
+      "id": 1090267102910365696,
+      "display_name": "Capybara"
+    },
+    "content": "<@514081567644188672>",
+    "attachments": [],
+    "embeds": [
+      {
+        "flags": 0,
+        "color": 5793266,
+        "type": "rich",
+        "description": "Thank you for contacting support! More details about the problem logs.",
+        "title": "SUPPORT ticket"
+      }
+    ]
+  }
+]
