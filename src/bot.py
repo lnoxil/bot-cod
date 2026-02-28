@@ -100,6 +100,7 @@ class SavedPost:
     title: str
     description: str
     color_hex: str = "2ECC71"
+    layout_mode: str = "sidebar"  # sidebar | window | container
     image_url: str | None = None
     image_position: str = "bottom"
 
@@ -226,6 +227,8 @@ def normalize_saved_post(raw: dict) -> SavedPost:
     data["extra_blocks"] = blocks
     data["order_style"] = normalize_style_name(str(data.get("order_style", "success")))
     data["support_style"] = normalize_style_name(str(data.get("support_style", "primary")))
+    layout_mode = str(data.get("layout_mode", "sidebar")).strip().lower()
+    data["layout_mode"] = layout_mode if layout_mode in {"sidebar", "window", "container"} else "sidebar"
     data["order_emoji"] = str(data.get("order_emoji", "🧾")).strip()
     data["support_emoji"] = str(data.get("support_emoji", "🛟")).strip()
     clean = {k: v for k, v in data.items() if k in allowed}
@@ -314,6 +317,7 @@ class TgRoleStore(JsonStore):
         super().__init__(path)
         self.roles: dict[int, str] = {}
         self.role_chats: dict[int, int] = {}
+        self.notify_chats: set[int] = set()
         self.load()
 
     def load(self) -> None:
@@ -322,9 +326,16 @@ class TgRoleStore(JsonStore):
         self.role_chats = {
             int(k): int(v) for k, v in data.get("role_chats", {}).items()
         }
+        self.notify_chats = {int(x) for x in data.get("notify_chats", [])}
 
     def save(self) -> None:
-        self._save({"roles": self.roles, "role_chats": self.role_chats})
+        self._save(
+            {
+                "roles": self.roles,
+                "role_chats": self.role_chats,
+                "notify_chats": sorted(self.notify_chats),
+            }
+        )
 
     def set_role(self, tg_user_id: int, role: str, chat_id: int | None = None) -> None:
         self.roles[tg_user_id] = role
@@ -348,6 +359,14 @@ class TgRoleStore(JsonStore):
             if role in allowed and uid in self.role_chats:
                 out.add(self.role_chats[uid])
         return out
+
+    def add_notify_chat(self, chat_id: int) -> None:
+        self.notify_chats.add(chat_id)
+        self.save()
+
+    def remove_notify_chat(self, chat_id: int) -> None:
+        self.notify_chats.discard(chat_id)
+        self.save()
 
 
 class CloseTicketButton(discord.ui.View):
@@ -468,6 +487,7 @@ def parse_button_tags(text: str, *, default_row: int = 0) -> tuple[str, list[Pan
 def materialize_post_for_send(post: SavedPost) -> SavedPost:
     cleaned_desc, tag_buttons = parse_button_tags(post.description, default_row=0)
     merged_buttons = list(post.panel_buttons) + tag_buttons
+    merged_buttons = stack_buttons_for_window_layout(post, merged_buttons)
     return replace(post, description=cleaned_desc, panel_buttons=merged_buttons)
 
 
@@ -577,6 +597,7 @@ class BridgeBot(commands.Bot):
             targets.add(opener_chat)
 
         targets.update(TG_ADMIN_IDS)
+        targets.update(self.tg_roles.notify_chats)
         targets.update(self.tg_roles.chats_with_roles({"admin", "manager"}))
         if ticket_type == "order":
             targets.update(self.tg_roles.chats_with_roles({"builder"}))
@@ -884,34 +905,125 @@ def hex_midpoint(a: str, b: str) -> str:
     return f"{(ar+br)//2:02X}{(ag+bg)//2:02X}{(ab+bb)//2:02X}"
 
 
+def is_window_layout(post: SavedPost) -> bool:
+    return str(post.layout_mode).strip().lower() == "window"
+
+
+def is_container_layout(post: SavedPost) -> bool:
+    return str(post.layout_mode).strip().lower() == "container"
+
+
+def stack_buttons_for_window_layout(post: SavedPost, buttons: list[PanelButton]) -> list[PanelButton]:
+    if not (is_window_layout(post) or is_container_layout(post)) or not buttons:
+        return buttons
+
+    # If rows are not explicitly configured (all in row 0), spread buttons one-per-row
+    # so visual layout is closer to sectioned panel references.
+    if any(int(getattr(b, "row", 0) or 0) != 0 for b in buttons):
+        return buttons
+
+    out: list[PanelButton] = []
+    for i, b in enumerate(buttons):
+        out.append(replace(b, row=max(0, min(4, i))))
+    return out
+
+
+def split_embed_text_chunks(text: str, *, limit: int = 3900) -> list[str]:
+    src = (text or "").strip()
+    if not src:
+        return [" "]
+    if len(src) <= limit:
+        return [src]
+
+    parts: list[str] = []
+    rest = src
+    while len(rest) > limit:
+        cut = rest.rfind("\n\n", 0, limit)
+        if cut < int(limit * 0.5):
+            cut = rest.rfind("\n", 0, limit)
+        if cut < int(limit * 0.5):
+            cut = limit
+        parts.append(rest[:cut].rstrip())
+        rest = rest[cut:].lstrip()
+    if rest:
+        parts.append(rest)
+    return parts
+
+
+def build_container_embeds(post: SavedPost) -> list[discord.Embed]:
+    sections: list[str] = []
+    if post.description.strip():
+        sections.append(post.description.strip())
+    for b in post.extra_blocks:
+        sec_title = f"### {b.title.strip()}" if b.title.strip() else ""
+        sec_desc = (b.description or "").strip()
+        sec = "\n".join(x for x in [sec_title, sec_desc] if x).strip()
+        if sec:
+            sections.append(sec)
+
+    merged = "\n\n".join(sections).strip()
+    chunks = split_embed_text_chunks(merged, limit=3900)
+
+    embeds: list[discord.Embed] = []
+    for i, chunk in enumerate(chunks):
+        emb = discord.Embed(
+            title=post.title if i == 0 else "",
+            description=chunk or " ",
+        )
+        if i == 0 and post.image_url:
+            emb.set_image(url=post.image_url)
+        embeds.append(emb)
+    return embeds
+
+
 def embeds_from_post(post: SavedPost) -> list[discord.Embed]:
+    is_window_mode = is_window_layout(post)
+    is_container_mode = is_container_layout(post)
     base_color_hex = post.color_hex
     if post.auto_gradient:
         base_color_hex = hex_midpoint(post.gradient_start_hex, post.gradient_end_hex)
-    main = discord.Embed(
-        title=post.title,
-        description=post.description,
-        color=int(base_color_hex.strip("#"), 16),
-    )
+
+    main_kwargs: dict[str, object] = {
+        "title": post.title,
+        "description": post.description,
+    }
+    if not (is_window_mode or is_container_mode):
+        main_kwargs["color"] = int(base_color_hex.strip("#"), 16)
+
+    main = discord.Embed(**main_kwargs)
     if post.image_url and post.image_position == "top":
         main.description = f"[image above]\n{main.description}"
         main.set_image(url=post.image_url)
     elif post.image_url:
         main.set_image(url=post.image_url)
 
+    if is_window_mode:
+        for b in post.extra_blocks:
+            main.add_field(
+                name=b.title or "—",
+                value=b.description or " ",
+                inline=False,
+            )
+        return [main]
+
+    if is_container_mode:
+        return build_container_embeds(post)
+
     result = [main]
     for b in post.extra_blocks:
-        eb = discord.Embed(
-            title=b.title,
-            description=b.description,
-            color=int(b.color_hex.strip("#"), 16),
-        )
+        block_kwargs: dict[str, object] = {
+            "title": b.title,
+            "description": b.description,
+        }
+        block_kwargs["color"] = int(b.color_hex.strip("#"), 16)
+        eb = discord.Embed(**block_kwargs)
         if b.image_url:
             if b.image_position == "top":
                 eb.description = f"[image above]\n{eb.description}"
             eb.set_image(url=b.image_url)
         result.append(eb)
     return result
+
 
 
 async def publish_post(bot: BridgeBot, post: SavedPost) -> discord.Message:
@@ -944,6 +1056,7 @@ async def tg_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         update,
         "Команды:\n"
         "/bind_discord <discord_user_id>\n"
+        "/bind_discord_user <discord_user_id> <tg_user_id> [tg_chat_id] - привязка по ID человека (админ)\n"
         "/set_role <tg_user_id> <admin|manager|builder|viewer> [chat_id]\n"
         "/register_me <role> - зарегистрировать себя и чат для уведомлений\n"
         "/my_role\n"
@@ -964,6 +1077,70 @@ async def tg_bind_discord(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if update.effective_user:
             bot.tg_roles.register_chat(update.effective_user.id, update.effective_chat.id)
         await tg_reply(update, f"Привязано ✅ discord={discord_user_id} -> tg_chat={update.effective_chat.id}")
+    except Exception as exc:
+        await tg_reply(update, f"Ошибка: {exc}")
+
+
+async def tg_bind_discord_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    bot: BridgeBot = context.application.bot_data["discord_bot"]
+    if not can_manage_roles(update):
+        await tg_reply(update, "Нет прав. Добавь свой TG user id в TG_ADMIN_IDS")
+        return
+
+    if len(context.args) not in {2, 3}:
+        await tg_reply(update, "Пример: /bind_discord_user 123456789012345678 987654321 [chat_id]")
+        return
+
+    try:
+        discord_user_id = int(context.args[0])
+        tg_user_id = int(context.args[1])
+        if len(context.args) == 3:
+            tg_chat_id = int(context.args[2])
+        else:
+            tg_chat_id = bot.tg_roles.role_chats.get(tg_user_id)
+
+        if tg_chat_id is None:
+            await tg_reply(
+                update,
+                "Не найден chat_id для этого tg_user_id. Передай chat_id 3-м аргументом "
+                "или попроси пользователя выполнить /register_me."
+            )
+            return
+
+        bot.user_links.link(discord_user_id, tg_chat_id)
+        bot.tg_roles.register_chat(tg_user_id, tg_chat_id)
+        await tg_reply(
+            update,
+            f"Привязано ✅ discord={discord_user_id} -> tg_user={tg_user_id} (chat_id={tg_chat_id})"
+        )
+    except Exception as exc:
+        await tg_reply(update, f"Ошибка: {exc}")
+
+
+async def tg_add_notify_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    bot: BridgeBot = context.application.bot_data["discord_bot"]
+    if not can_manage_roles(update):
+        await tg_reply(update, "Нет прав. Добавь свой TG user id в TG_ADMIN_IDS")
+        return
+
+    if len(context.args) not in {1, 2}:
+        await tg_reply(update, "Пример: /add_notify_user 987654321 [chat_id]")
+        return
+
+    try:
+        tg_user_id = int(context.args[0])
+        tg_chat_id = int(context.args[1]) if len(context.args) == 2 else bot.tg_roles.role_chats.get(tg_user_id)
+        if tg_chat_id is None:
+            await tg_reply(
+                update,
+                "Не найден chat_id для tg_user_id. Передай chat_id вторым аргументом "
+                "или попроси пользователя выполнить /register_me."
+            )
+            return
+
+        bot.tg_roles.register_chat(tg_user_id, tg_chat_id)
+        bot.tg_roles.add_notify_chat(tg_chat_id)
+        await tg_reply(update, f"Добавлен получатель уведомлений ✅ tg_user={tg_user_id}, chat_id={tg_chat_id}")
     except Exception as exc:
         await tg_reply(update, f"Ошибка: {exc}")
 
@@ -1139,12 +1316,17 @@ def parse_post_json(data: dict) -> SavedPost:
             )
         )
 
+    layout_mode = str(data.get("layout_mode", "sidebar")).strip().lower()
+    if layout_mode not in {"sidebar", "window", "container"}:
+        layout_mode = "sidebar"
+
     post = SavedPost(
         name=str(data["name"]).strip().lower(),
         channel_id=int(data["channel_id"]),
         title=str(data.get("title", "")),
         description=str(data.get("description", "")),
         color_hex=str(data.get("color_hex", "2ECC71")),
+        layout_mode=layout_mode,
         image_url=str(data.get("image_url", "")).strip() or None,
         image_position=str(data.get("image_position", "bottom")),
         is_ticket_panel=bool(data.get("is_ticket_panel", False)),
@@ -1245,6 +1427,8 @@ async def run() -> None:
 
     tg_app.add_handler(CommandHandler("start", tg_start))
     tg_app.add_handler(CommandHandler("bind_discord", tg_bind_discord))
+    tg_app.add_handler(CommandHandler("bind_discord_user", tg_bind_discord_user))
+    tg_app.add_handler(CommandHandler("add_notify_user", tg_add_notify_user))
     tg_app.add_handler(CommandHandler("set_role", tg_set_role))
     tg_app.add_handler(CommandHandler("register_me", tg_register_me))
     tg_app.add_handler(CommandHandler("my_role", tg_my_role))
@@ -1257,7 +1441,9 @@ async def run() -> None:
     await tg_app.bot.set_my_commands(
         [
             BotCommand("start", "Показать команды"),
-            BotCommand("bind_discord", "Привязать Discord пользователя"),
+            BotCommand("bind_discord", "Привязать свой Discord ID"),
+            BotCommand("bind_discord_user", "Привязать Discord по TG user ID"),
+            BotCommand("add_notify_user", "Добавить получателя уведомлений"),
             BotCommand("set_role", "Назначить роль пользователю TG"),
             BotCommand("register_me", "Зарегистрировать себя для уведомлений"),
             BotCommand("my_role", "Показать мою роль"),
